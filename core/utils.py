@@ -3,18 +3,27 @@ import logging
 import os
 
 def setup_logger():
-    log_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'logs', 'conversations.log')
-    log_path = os.path.abspath(log_path)
+    logger = logging.getLogger('magni')
+    logger.setLevel(logging.INFO)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_path),
-            logging.StreamHandler()
-        ]
-    )
-    return logging.getLogger('magni')
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        ))
+        logger.addHandler(handler)
+
+        # Only add file handler if data/logs directory exists or can be created
+        try:
+            log_path = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), '..', 'data', 'logs', 'conversations.log')
+            )
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            logger.addHandler(logging.FileHandler(log_path))
+        except Exception:
+            pass  # File logging unavailable — console only
+
+    return logger
 
 def sanitize_input(text: str) -> str:
     if not text:
