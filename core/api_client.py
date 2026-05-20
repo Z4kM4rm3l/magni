@@ -2,6 +2,7 @@ import os
 import google.generativeai as genai
 from dotenv import load_dotenv
 from core.support_flows import get_flow_context
+from core.knowledge_base import get_kb_context
 from core.utils import logger
 
 load_dotenv()
@@ -22,14 +23,20 @@ Your boundaries:
 - Never make up account details, order numbers, or policies
 - If you don't know something, say so and offer to escalate
 - Keep responses focused and under 150 words unless detail is truly needed
+- When knowledge base information is provided, prioritize it over general knowledge
 
 Always end responses with a clear next step or offer to help further."""
 
 def get_magni_response(message: str, history: list, intent: str) -> str:
     try:
         flow_context = get_flow_context(intent)
+        kb_context = get_kb_context(message)
 
+        # Build full system prompt with KB context if available
         full_system = f"{MAGNI_SYSTEM_PROMPT}\n\n{flow_context}"
+        if kb_context:
+            full_system += f"\n\n{kb_context}"
+            logger.info(f"KB context injected for message: {message[:40]}")
 
         model = genai.GenerativeModel(
             model_name="gemini-2.5-flash",

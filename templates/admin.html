@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Magni Admin — Knowledge Base</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #faf7f2;
+      --bg-card: #ffffff;
+      --bg-dark: #1a1a2e;
+      --amber: #d4810a;
+      --amber-light: #f5a623;
+      --amber-dim: rgba(212,129,10,0.1);
+      --amber-glow: rgba(212,129,10,0.25);
+      --sage: #5a7a6a;
+      --sage-dim: rgba(90,122,106,0.1);
+      --red: #e53e3e;
+      --red-dim: rgba(229,62,62,0.1);
+      --text: #1a1a1a;
+      --text-dim: #6b6b6b;
+      --text-light: #9b9b9b;
+      --border: rgba(0,0,0,0.08);
+      --border-strong: rgba(0,0,0,0.14);
+      --shadow: 0 2px 20px rgba(0,0,0,0.06);
+      --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+      --font-display: 'Fraunces', serif;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+    html, body { min-height: 100%; font-family: var(--font-body); background: var(--bg); color: var(--text); }
+
+    /* HEADER */
+    header {
+      background: var(--bg-dark);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-brand { display: flex; align-items: center; gap: 0.8rem; }
+    .header-brand-name { font-family: var(--font-display); font-size: 1.4rem; color: white; }
+    .header-badge {
+      font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.15em;
+      color: var(--amber-light); background: rgba(212,129,10,0.15);
+      border: 1px solid rgba(212,129,10,0.3); padding: 0.2rem 0.6rem; border-radius: 20px;
+      text-transform: uppercase;
+    }
+    .header-nav a {
+      font-family: var(--font-mono); font-size: 0.8rem; color: rgba(255,255,255,0.6);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .header-nav a:hover { color: white; }
+
+    /* LAYOUT */
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+
+    .page-title {
+      font-family: var(--font-display); font-size: 2rem; font-weight: 600;
+      color: var(--text); margin-bottom: 0.3rem;
+    }
+    .page-subtitle { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 2rem; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1.6fr; gap: 2rem; align-items: start; }
+
+    /* CARDS */
+    .card {
+      background: var(--bg-card); border-radius: 16px;
+      border: 1px solid var(--border); box-shadow: var(--shadow); padding: 1.8rem;
+    }
+    .card-title {
+      font-family: var(--font-display); font-size: 1.1rem; font-weight: 600;
+      color: var(--text); margin-bottom: 1.2rem; padding-bottom: 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* FORM */
+    .form-group { margin-bottom: 1.2rem; }
+    label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-dim); margin-bottom: 0.4rem; letter-spacing: 0.03em; }
+    input, textarea, select {
+      width: 100%; padding: 0.7rem 0.9rem;
+      border: 1.5px solid var(--border-strong); border-radius: 10px;
+      font-family: var(--font-body); font-size: 0.88rem; color: var(--text);
+      background: var(--bg); outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--amber); box-shadow: 0 0 0 3px var(--amber-dim);
+    }
+    textarea { resize: vertical; min-height: 140px; line-height: 1.6; }
+
+    .btn {
+      font-family: var(--font-body); font-size: 0.88rem; font-weight: 500;
+      padding: 0.75rem 1.4rem; border-radius: 10px; border: none;
+      cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.4rem;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--amber), var(--amber-light));
+      color: white; box-shadow: 0 2px 8px var(--amber-glow); width: 100%;
+      justify-content: center;
+    }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-sm {
+      font-size: 0.75rem; padding: 0.4rem 0.8rem; border-radius: 7px;
+    }
+    .btn-edit { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(212,129,10,0.2); }
+    .btn-edit:hover { background: rgba(212,129,10,0.18); }
+    .btn-delete { background: var(--red-dim); color: var(--red); border: 1px solid rgba(229,62,62,0.2); }
+    .btn-delete:hover { background: rgba(229,62,62,0.18); }
+    .btn-cancel { background: var(--bg); color: var(--text-dim); border: 1px solid var(--border-strong); margin-right: 0.5rem; }
+
+    /* SUMMARY BOX */
+    .summary-box {
+      background: var(--sage-dim); border: 1px solid rgba(90,122,106,0.2);
+      border-radius: 10px; padding: 1rem 1.2rem; margin-top: 1rem;
+      display: none;
+    }
+    .summary-box.visible { display: block; }
+    .summary-label {
+      font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.12em;
+      color: var(--sage); text-transform: uppercase; margin-bottom: 0.4rem;
+      display: flex; align-items: center; gap: 0.4rem;
+    }
+    .summary-text { font-size: 0.85rem; color: var(--text); line-height: 1.6; }
+
+    /* ARTICLE LIST */
+    .article-list { display: flex; flex-direction: column; gap: 1rem; }
+    .article-item {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.2rem 1.4rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .article-item:hover { border-color: var(--amber); box-shadow: 0 2px 12px var(--amber-dim); }
+    .article-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; }
+    .article-title { font-weight: 600; font-size: 0.92rem; color: var(--text); }
+    .article-category {
+      font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em;
+      color: var(--amber); background: var(--amber-dim);
+      border: 1px solid rgba(212,129,10,0.2); padding: 0.15rem 0.5rem;
+      border-radius: 20px; text-transform: uppercase; white-space: nowrap; flex-shrink: 0;
+    }
+    .article-summary { font-size: 0.82rem; color: var(--text-dim); line-height: 1.5; margin-bottom: 0.8rem; }
+    .article-actions { display: flex; gap: 0.5rem; }
+    .article-date { font-family: var(--font-mono); font-size: 0.65rem; color: var(--text-light); margin-left: auto; }
+
+    /* EMPTY STATE */
+    .empty-state {
+      text-align: center; padding: 3rem 1rem; color: var(--text-light);
+    }
+    .empty-state-icon { font-size: 2.5rem; margin-bottom: 0.8rem; }
+    .empty-state p { font-size: 0.88rem; }
+
+    /* STATS */
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.2rem; text-align: center; box-shadow: var(--shadow);
+    }
+    .stat-value { font-family: var(--font-display); font-size: 2rem; color: var(--amber); line-height: 1; }
+    .stat-label { font-size: 0.72rem; color: var(--text-dim); margin-top: 0.3rem; font-weight: 500; }
+
+    /* LOADING */
+    .loading { text-align: center; padding: 2rem; color: var(--text-light); font-size: 0.85rem; }
+    .spinner {
+      width: 24px; height: 24px; border: 2px solid var(--border-strong);
+      border-top-color: var(--amber); border-radius: 50%;
+      animation: spin 0.7s linear infinite; margin: 0 auto 0.8rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* TOAST */
+    .toast {
+      position: fixed; bottom: 2rem; right: 2rem;
+      background: var(--bg-dark); color: white;
+      padding: 0.8rem 1.4rem; border-radius: 10px;
+      font-size: 0.85rem; box-shadow: var(--shadow-lg);
+      transform: translateY(100px); opacity: 0;
+      transition: all 0.3s; z-index: 200;
+    }
+    .toast.visible { transform: translateY(0); opacity: 1; }
+    .toast.success { border-left: 3px solid #4ade80; }
+    .toast.error { border-left: 3px solid var(--red); }
+
+    @media (max-width: 768px) {
+      .grid { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .container { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;">
+      <svg viewBox="130 80 420 530" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">
+        <rect x="130" y="80" width="420" height="530" fill="#1e2d1a"/>
+        <rect x="130" y="80" width="420" height="510" rx="30" fill="#6a6258"/>
+        <ellipse cx="248" cy="310" rx="62" ry="50" fill="#1a1510"/>
+        <ellipse cx="432" cy="310" rx="62" ry="50" fill="#1a1510"/>
+        <ellipse cx="248" cy="310" rx="38" ry="32" fill="#d4810a"/>
+        <ellipse cx="432" cy="310" rx="38" ry="32" fill="#d4810a"/>
+        <ellipse cx="248" cy="310" rx="24" ry="20" fill="#ffcc44"/>
+        <ellipse cx="432" cy="310" rx="24" ry="20" fill="#ffcc44"/>
+        <ellipse cx="248" cy="310" rx="12" ry="12" fill="#1a0800"/>
+        <ellipse cx="432" cy="310" rx="12" ry="12" fill="#1a0800"/>
+        <circle cx="258" cy="300" r="5" fill="white"/>
+        <circle cx="442" cy="300" r="5" fill="white"/>
+        <path d="M220 490 Q340 518 460 490" fill="none" stroke="#2a2820" stroke-width="5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="header-brand-name">Magni</div>
+    <span class="header-badge">Admin Panel</span>
+  </div>
+  <nav class="header-nav">
+    <a href="/">← Back to Chat</a>
+  </nav>
+</header>
+
+<div class="container">
+
+  <div class="page-title">Knowledge Base</div>
+  <p class="page-subtitle">Add articles, FAQs, and policies that Magni will use to answer customer questions accurately.</p>
+
+  <!-- STATS -->
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card"><div class="stat-value" id="statTotal">—</div><div class="stat-label">Total Articles</div></div>
+    <div class="stat-card"><div class="stat-value" id="statCategories">—</div><div class="stat-label">Categories</div></div>
+    <div class="stat-card"><div class="stat-value" id="statLatest">—</div><div class="stat-label">Last Updated</div></div>
+  </div>
+
+  <div class="grid">
+
+    <!-- LEFT — ADD / EDIT FORM -->
+    <div>
+      <div class="card">
+        <div class="card-title" id="formTitle">Add New Article</div>
+
+        <div class="form-group">
+          <label>Article Title</label>
+          <input type="text" id="articleTitle" placeholder="e.g. Return Policy, Shipping Times..."/>
+        </div>
+
+        <div class="form-group">
+          <label>Category</label>
+          <select id="articleCategory">
+            <option value="general">General</option>
+            <option value="billing">Billing</option>
+            <option value="technical">Technical</option>
+            <option value="orders">Orders & Shipping</option>
+            <option value="product">Products & Features</option>
+            <option value="policies">Policies</option>
+            <option value="faq">FAQ</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Content</label>
+          <textarea id="articleContent" placeholder="Paste your policy, FAQ, or knowledge article here. Magni will read this to answer customer questions..."></textarea>
+        </div>
+
+        <!-- AI Summary Preview -->
+        <div class="summary-box" id="summaryBox">
+          <div class="summary-label">✦ AI Summary</div>
+          <div class="summary-text" id="summaryText"></div>
+        </div>
+
+        <div style="margin-top:1.2rem; display:flex; gap:0.5rem;">
+          <button class="btn btn-cancel" id="cancelBtn" onclick="cancelEdit()" style="display:none; flex:1;">Cancel</button>
+          <button class="btn btn-primary" id="submitBtn" onclick="submitArticle()">
+            ✦ Save Article
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT — ARTICLE LIST -->
+    <div>
+      <div class="card">
+        <div class="card-title">Articles <span id="articleCount" style="font-weight:300;color:var(--text-light);font-size:0.85rem;"></span></div>
+        <div id="articleList">
+          <div class="loading"><div class="spinner"></div>Loading articles...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+  let editingId = null;
+  let articles = [];
+
+  async function loadArticles() {
+    try {
+      const res = await fetch('/api/kb');
+      const data = await res.json();
+      articles = data.articles || [];
+      renderArticles(articles);
+      updateStats(articles, data.categories || []);
+    } catch (e) {
+      document.getElementById('articleList').innerHTML =
+        '<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Could not load articles.</p></div>';
+    }
+  }
+
+  function updateStats(articles, categories) {
+    document.getElementById('statTotal').textContent = articles.length;
+    document.getElementById('statCategories').textContent = categories.length || 0;
+
+    if (articles.length > 0) {
+      const latest = new Date(articles[0].updated_at * 1000);
+      document.getElementById('statLatest').textContent =
+        latest.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } else {
+      document.getElementById('statLatest').textContent = '—';
+    }
+  }
+
+  function renderArticles(articles) {
+    const container = document.getElementById('articleList');
+    document.getElementById('articleCount').textContent =
+      articles.length > 0 ? `(${articles.length})` : '';
+
+    if (articles.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📄</div>
+          <p>No articles yet. Add your first article to help Magni answer questions accurately.</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = articles.map(article => `
+      <div class="article-item" id="article-${article.id}">
+        <div class="article-item-header">
+          <div class="article-title">${escapeHtml(article.title)}</div>
+          <span class="article-category">${escapeHtml(article.category)}</span>
+        </div>
+        <div class="article-summary">${escapeHtml(article.summary || 'No summary available.')}</div>
+        <div class="article-actions">
+          <button class="btn btn-sm btn-edit" onclick="editArticle('${article.id}')">✏️ Edit</button>
+          <button class="btn btn-sm btn-delete" onclick="deleteArticle('${article.id}')">🗑 Delete</button>
+          <span class="article-date">${formatDate(article.updated_at)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function submitArticle() {
+    const title = document.getElementById('articleTitle').value.trim();
+    const content = document.getElementById('articleContent').value.trim();
+    const category = document.getElementById('articleCategory').value;
+
+    if (!title || !content) {
+      showToast('Title and content are required.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving & generating summary...';
+
+    try {
+      const method = editingId ? 'PUT' : 'POST';
+      const url = editingId ? `/api/kb/${editingId}` : '/api/kb';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content, category })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // Show AI summary
+        const summaryBox = document.getElementById('summaryBox');
+        const summaryText = document.getElementById('summaryText');
+        summaryText.textContent = data.article.summary;
+        summaryBox.classList.add('visible');
+
+        showToast(editingId ? 'Article updated!' : 'Article added!', 'success');
+        cancelEdit();
+        await loadArticles();
+      } else {
+        showToast(data.error || 'Something went wrong.', 'error');
+      }
+    } catch (e) {
+      showToast('Connection error.', 'error');
+    }
+
+    btn.disabled = false;
+    btn.textContent = '✦ Save Article';
+  }
+
+  function editArticle(id) {
+    const article = articles.find(a => a.id === id);
+    if (!article) return;
+
+    editingId = id;
+    document.getElementById('articleTitle').value = article.title;
+    document.getElementById('articleContent').value = article.content;
+    document.getElementById('articleCategory').value = article.category;
+    document.getElementById('formTitle').textContent = 'Edit Article';
+    document.getElementById('cancelBtn').style.display = 'block';
+    document.getElementById('submitBtn').textContent = '✦ Update Article';
+
+    // Show existing summary
+    const summaryBox = document.getElementById('summaryBox');
+    document.getElementById('summaryText').textContent = article.summary || '';
+    summaryBox.classList.add('visible');
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelEdit() {
+    editingId = null;
+    document.getElementById('articleTitle').value = '';
+    document.getElementById('articleContent').value = '';
+    document.getElementById('articleCategory').value = 'general';
+    document.getElementById('formTitle').textContent = 'Add New Article';
+    document.getElementById('cancelBtn').style.display = 'none';
+    document.getElementById('submitBtn').textContent = '✦ Save Article';
+    document.getElementById('summaryBox').classList.remove('visible');
+  }
+
+  async function deleteArticle(id) {
+    if (!confirm('Delete this article? Magni will no longer use it to answer questions.')) return;
+
+    try {
+      const res = await fetch(`/api/kb/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('Article deleted.', 'success');
+        await loadArticles();
+      } else {
+        showToast('Could not delete article.', 'error');
+      }
+    } catch (e) {
+      showToast('Connection error.', 'error');
+    }
+  }
+
+  function showToast(message, type = 'success') {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = `toast ${type} visible`;
+    setTimeout(() => toast.classList.remove('visible'), 3000);
+  }
+
+  function formatDate(timestamp) {
+    return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric'
+    });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str || ''));
+    return div.innerHTML;
+  }
+
+  // Load on start
+  loadArticles();
+</script>
+</body>
+</html>
