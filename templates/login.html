@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Magni — Admin Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #faf7f2;
+      --bg-dark: #1a1a2e;
+      --amber: #d4810a;
+      --amber-light: #f5a623;
+      --amber-dim: rgba(212,129,10,0.1);
+      --amber-glow: rgba(212,129,10,0.25);
+      --text: #1a1a1a;
+      --text-dim: #6b6b6b;
+      --border: rgba(0,0,0,0.08);
+      --border-strong: rgba(0,0,0,0.14);
+      --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+      --font-display: 'Fraunces', serif;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-dark);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .login-card {
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: var(--shadow-lg);
+    }
+    .login-brand {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .login-avatar {
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      overflow: hidden;
+      margin: 0 auto 1rem;
+    }
+    .login-title {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.2rem;
+    }
+    .login-subtitle {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .form-group { margin-bottom: 1.2rem; }
+    label {
+      display: block; font-size: 0.8rem; font-weight: 500;
+      color: var(--text-dim); margin-bottom: 0.4rem;
+    }
+    input {
+      width: 100%; padding: 0.8rem 1rem;
+      border: 1.5px solid var(--border-strong);
+      border-radius: 10px; font-family: var(--font-body);
+      font-size: 0.9rem; color: var(--text);
+      background: var(--bg); outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus {
+      border-color: var(--amber);
+      box-shadow: 0 0 0 3px var(--amber-dim);
+    }
+    .btn-login {
+      width: 100%; padding: 0.85rem;
+      background: linear-gradient(135deg, var(--amber), var(--amber-light));
+      color: white; border: none; border-radius: 10px;
+      font-family: var(--font-body); font-size: 0.9rem;
+      font-weight: 600; cursor: pointer;
+      box-shadow: 0 2px 8px var(--amber-glow);
+      transition: opacity 0.2s, transform 0.2s;
+      margin-top: 0.5rem;
+    }
+    .btn-login:hover { opacity: 0.9; transform: translateY(-1px); }
+    .error {
+      background: rgba(229,62,62,0.08);
+      border: 1px solid rgba(229,62,62,0.2);
+      color: #e53e3e; border-radius: 8px;
+      padding: 0.7rem 1rem; font-size: 0.82rem;
+      margin-bottom: 1rem; text-align: center;
+    }
+    .back-link {
+      display: block; text-align: center; margin-top: 1.2rem;
+      font-family: var(--font-mono); font-size: 0.72rem;
+      color: var(--text-dim); text-decoration: none;
+      letter-spacing: 0.05em; transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--amber); }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-avatar">
+        <svg viewBox="130 80 420 530" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">
+          <rect x="130" y="80" width="420" height="530" fill="#1e2d1a"/>
+          <rect x="130" y="80" width="420" height="510" rx="30" fill="#6a6258"/>
+          <ellipse cx="248" cy="310" rx="62" ry="50" fill="#1a1510"/>
+          <ellipse cx="432" cy="310" rx="62" ry="50" fill="#1a1510"/>
+          <ellipse cx="248" cy="310" rx="38" ry="32" fill="#d4810a"/>
+          <ellipse cx="432" cy="310" rx="38" ry="32" fill="#d4810a"/>
+          <ellipse cx="248" cy="310" rx="24" ry="20" fill="#ffcc44"/>
+          <ellipse cx="432" cy="310" rx="24" ry="20" fill="#ffcc44"/>
+          <ellipse cx="248" cy="310" rx="12" ry="12" fill="#1a0800"/>
+          <ellipse cx="432" cy="310" rx="12" ry="12" fill="#1a0800"/>
+          <circle cx="258" cy="300" r="5" fill="white"/>
+          <circle cx="442" cy="300" r="5" fill="white"/>
+          <path d="M220 490 Q340 518 460 490" fill="none" stroke="#2a2820" stroke-width="5" stroke-linecap="round"/>
+          <path d="M138 430 C122 390 118 330 132 270" fill="none" stroke="#3a7a2a" stroke-width="5" stroke-linecap="round"/>
+          <path d="M542 428 C558 388 562 328 548 268" fill="none" stroke="#3a7a2a" stroke-width="5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="login-title">Magni</div>
+      <div class="login-subtitle">Admin Portal</div>
+    </div>
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/admin/login">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="username" placeholder="Enter username" autocomplete="username" required/>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Enter password" autocomplete="current-password" required/>
+      </div>
+      <button type="submit" class="btn-login">Sign In to Admin Portal</button>
+    </form>
+
+    <a href="/" class="back-link">← Back to Magni Chat</a>
+  </div>
+</body>
+</html>

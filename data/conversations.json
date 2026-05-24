@@ -1,0 +1,62 @@
+[
+  {
+    "session_id": "6cff956a-8b87-4b2c-849c-982cba8c647d",
+    "started_at": 1779631179.8485346,
+    "ended_at": 1779631245.2618353,
+    "message_count": 8,
+    "intents": [
+      "orders",
+      "general",
+      "technical"
+    ],
+    "primary_intent": "orders",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, please assist me with tracking my shipment",
+        "timestamp": 1779631181.775136
+      },
+      {
+        "role": "assistant",
+        "content": "Hello there! I'd be happy to help you track your shipment.\n\nTo do this, I'll need your order number. Once you provide that, I can look up the tracking information for you and let you know its current status.\n\nPlease provide your order number, and I'll assist you right away!",
+        "timestamp": 1779631181.7849402
+      },
+      {
+        "role": "user",
+        "content": "1234567 is my order number, thanks!",
+        "timestamp": 1779631196.6864004
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you for providing your order number, 1234567!\n\nAs an AI, I don't have direct access to our live shipping systems to pull up your specific tracking details. However, I can certainly guide you on how to find it and what to expect.\n\nTypically, you can find your tracking information in one of two places:\n\n1.  **Your Shipping Confirmation Email:** We send an email with your tracking number and a direct link to the carrier's tracking page once your order ships. Please check your inbox and spam folder for an email from us.\n2.  **Your Account Page:** If you have an account with us, you can usually log in and view your order history. The tracking information is often available there.\n\nIf you've checked both of these and are still unable to find your tracking information or if you have any trouble, please let me know, and I can connect you with a human colleague who can directly look up your order details for you.",
+        "timestamp": 1779631196.6978676
+      },
+      {
+        "role": "user",
+        "content": "Human colleague, I love it. Sure go ahead",
+        "timestamp": 1779631225.2524722
+      },
+      {
+        "role": "assistant",
+        "content": "I understand! I'd be happy to connect you with a human colleague who can directly access our systems and assist you with your tracking information.\n\nTo do this, I will initiate a transfer to our live support team. Please bear with me for a moment while I set that up.\n\nIs there anything else I can clarify for you before I initiate the transfer?",
+        "timestamp": 1779631225.264909
+      },
+      {
+        "role": "user",
+        "content": "That would be all, thanks again for your help.",
+        "timestamp": 1779631240.9638915
+      },
+      {
+        "role": "assistant",
+        "content": "You're very welcome! I'm glad I could assist you with the first steps.\n\nI'm initiating the transfer now. A human colleague will be with you shortly to help you further with your shipment tracking.\n\nThank you for your patience!",
+        "timestamp": 1779631240.9761443
+      }
+    ],
+    "resolved": true,
+    "resolution_source": "customer",
+    "rating": 5,
+    "feedback_comment": "Great job!",
+    "date": "2026-05-24",
+    "hour": 13
+  }
+]

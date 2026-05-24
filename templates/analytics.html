@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Magni — Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #faf7f2;
+      --bg-card: #ffffff;
+      --bg-dark: #1a1a2e;
+      --amber: #d4810a;
+      --amber-light: #f5a623;
+      --amber-dim: rgba(212,129,10,0.1);
+      --amber-glow: rgba(212,129,10,0.25);
+      --green: #38a169;
+      --green-dim: rgba(56,161,105,0.1);
+      --red: #e53e3e;
+      --red-dim: rgba(229,62,62,0.1);
+      --purple: #6366f1;
+      --purple-dim: rgba(99,102,241,0.1);
+      --text: #1a1a1a;
+      --text-dim: #6b6b6b;
+      --text-light: #9b9b9b;
+      --border: rgba(0,0,0,0.08);
+      --border-strong: rgba(0,0,0,0.14);
+      --shadow: 0 2px 20px rgba(0,0,0,0.06);
+      --font-display: 'Fraunces', serif;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+    html, body { min-height: 100%; font-family: var(--font-body); background: var(--bg); color: var(--text); }
+
+    header {
+      background: var(--bg-dark); padding: 1rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .header-brand { display: flex; align-items: center; gap: 0.8rem; }
+    .header-avatar { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; }
+    .header-name { font-family: var(--font-display); font-size: 1.3rem; color: white; }
+    .header-badge {
+      font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.15em;
+      color: var(--amber-light); background: rgba(212,129,10,0.15);
+      border: 1px solid rgba(212,129,10,0.3); padding: 0.2rem 0.6rem;
+      border-radius: 20px; text-transform: uppercase;
+    }
+    .header-nav { display: flex; gap: 1.5rem; align-items: center; }
+    .header-nav a {
+      font-family: var(--font-mono); font-size: 0.75rem;
+      color: rgba(255,255,255,0.5); text-decoration: none; transition: color 0.2s;
+    }
+    .header-nav a:hover { color: white; }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    .page-title { font-family: var(--font-display); font-size: 2rem; font-weight: 600; margin-bottom: 0.3rem; }
+    .page-subtitle { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 2rem; }
+
+    /* TIME FILTER */
+    .time-filter {
+      display: flex; gap: 0.5rem; margin-bottom: 2rem;
+    }
+    .filter-btn {
+      font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em;
+      padding: 0.45rem 1rem; border-radius: 8px; border: 1.5px solid var(--border-strong);
+      background: var(--bg-card); color: var(--text-dim); cursor: pointer; transition: all 0.2s;
+    }
+    .filter-btn.active {
+      background: var(--amber); border-color: var(--amber);
+      color: white; box-shadow: 0 2px 8px var(--amber-glow);
+    }
+    .filter-btn:hover:not(.active) { border-color: var(--amber); color: var(--amber); }
+
+    /* KPI CARDS */
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 1.2rem; margin-bottom: 2rem;
+    }
+    .kpi-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.4rem; box-shadow: var(--shadow);
+      position: relative; overflow: hidden;
+    }
+    .kpi-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .kpi-card.amber::before { background: linear-gradient(90deg, var(--amber), var(--amber-light)); }
+    .kpi-card.green::before { background: linear-gradient(90deg, #38a169, #68d391); }
+    .kpi-card.purple::before { background: linear-gradient(90deg, #6366f1, #a5b4fc); }
+    .kpi-card.red::before { background: linear-gradient(90deg, #e53e3e, #fc8181); }
+
+    .kpi-label {
+      font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.15em;
+      color: var(--text-light); text-transform: uppercase; margin-bottom: 0.6rem;
+    }
+    .kpi-value {
+      font-family: var(--font-display); font-size: 2.4rem;
+      line-height: 1; color: var(--text); margin-bottom: 0.3rem;
+    }
+    .kpi-value.amber { color: var(--amber); }
+    .kpi-value.green { color: var(--green); }
+    .kpi-value.purple { color: var(--purple); }
+    .kpi-sub { font-size: 0.75rem; color: var(--text-light); }
+
+    /* CHARTS GRID */
+    .charts-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 1.5rem; margin-bottom: 1.5rem;
+    }
+    .chart-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.4rem; box-shadow: var(--shadow);
+    }
+    .chart-title {
+      font-family: var(--font-display); font-size: 1rem; font-weight: 600;
+      margin-bottom: 1.2rem; color: var(--text);
+    }
+    .chart-container { position: relative; height: 240px; }
+
+    /* AI INSIGHTS */
+    .insights-card {
+      background: var(--bg-dark); border-radius: 14px;
+      padding: 1.6rem; margin-bottom: 1.5rem; box-shadow: var(--shadow);
+    }
+    .insights-header {
+      display: flex; align-items: center; gap: 0.6rem;
+      margin-bottom: 1.2rem;
+    }
+    .insights-title {
+      font-family: var(--font-display); font-size: 1rem; font-weight: 600; color: white;
+    }
+    .insights-badge {
+      font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.12em;
+      color: var(--amber-light); background: rgba(212,129,10,0.15);
+      border: 1px solid rgba(212,129,10,0.3); padding: 0.15rem 0.5rem;
+      border-radius: 20px; text-transform: uppercase;
+    }
+    .insight-item {
+      display: flex; gap: 0.8rem; margin-bottom: 0.8rem;
+      padding: 0.9rem 1rem; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06); border-radius: 10px;
+    }
+    .insight-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 0.1rem; }
+    .insight-text { font-size: 0.84rem; color: rgba(255,255,255,0.75); line-height: 1.6; }
+    .insight-text strong { color: var(--amber-light); }
+    .insights-loading { text-align: center; padding: 1.5rem; color: rgba(255,255,255,0.3); font-size: 0.85rem; }
+    .insights-spinner {
+      width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1);
+      border-top-color: var(--amber); border-radius: 50%;
+      animation: spin 0.7s linear infinite; margin: 0 auto 0.6rem;
+    }
+
+    /* FEEDBACK + UNRESOLVED */
+    .bottom-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+    }
+    .section-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.4rem; box-shadow: var(--shadow);
+    }
+    .section-title {
+      font-family: var(--font-display); font-size: 1rem; font-weight: 600;
+      margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--border);
+    }
+    .feedback-item {
+      padding: 0.9rem 0; border-bottom: 1px solid var(--border); display: flex; gap: 0.8rem;
+    }
+    .feedback-item:last-child { border-bottom: none; }
+    .feedback-stars { color: var(--amber); font-size: 0.8rem; flex-shrink: 0; }
+    .feedback-comment { font-size: 0.82rem; color: var(--text-dim); line-height: 1.5; flex: 1; }
+    .feedback-meta {
+      font-family: var(--font-mono); font-size: 0.62rem; color: var(--text-light); margin-top: 0.2rem;
+    }
+    .unresolved-item {
+      padding: 0.9rem 0; border-bottom: 1px solid var(--border);
+    }
+    .unresolved-item:last-child { border-bottom: none; }
+    .unresolved-intent {
+      font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.08em;
+      color: var(--red); text-transform: uppercase; margin-bottom: 0.3rem;
+    }
+    .unresolved-msg { font-size: 0.82rem; color: var(--text-dim); line-height: 1.5; }
+    .unresolved-meta { font-family: var(--font-mono); font-size: 0.62rem; color: var(--text-light); margin-top: 0.2rem; }
+
+    .empty-state { text-align: center; padding: 2rem; color: var(--text-light); font-size: 0.85rem; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 900px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+      .bottom-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <div class="header-avatar">
+      <svg viewBox="130 80 420 530" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">
+        <rect x="130" y="80" width="420" height="530" fill="#1e2d1a"/>
+        <rect x="130" y="80" width="420" height="510" rx="30" fill="#6a6258"/>
+        <ellipse cx="248" cy="310" rx="62" ry="50" fill="#1a1510"/>
+        <ellipse cx="432" cy="310" rx="62" ry="50" fill="#1a1510"/>
+        <ellipse cx="248" cy="310" rx="38" ry="32" fill="#d4810a"/>
+        <ellipse cx="432" cy="310" rx="38" ry="32" fill="#d4810a"/>
+        <ellipse cx="248" cy="310" rx="24" ry="20" fill="#ffcc44"/>
+        <ellipse cx="432" cy="310" rx="24" ry="20" fill="#ffcc44"/>
+        <ellipse cx="248" cy="310" rx="12" ry="12" fill="#1a0800"/>
+        <ellipse cx="432" cy="310" rx="12" ry="12" fill="#1a0800"/>
+        <circle cx="258" cy="300" r="5" fill="white"/>
+        <circle cx="442" cy="300" r="5" fill="white"/>
+        <path d="M220 490 Q340 518 460 490" fill="none" stroke="#2a2820" stroke-width="5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="header-name">Magni</div>
+    <span class="header-badge">Analytics</span>
+  </div>
+  <nav class="header-nav">
+    <a href="/admin">← Hub</a>
+    <a href="/admin/kb">Knowledge Base</a>
+    <a href="/admin/clients">Clients</a>
+    <a href="/">Chat</a>
+    <a href="/admin/logout">Sign Out</a>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="page-title">Analytics Dashboard</div>
+  <p class="page-subtitle">Real-time insights into customer conversations, resolution rates, and satisfaction.</p>
+
+  <!-- TIME FILTER -->
+  <div class="time-filter">
+    <button class="filter-btn" onclick="setFilter('today')">Today</button>
+    <button class="filter-btn active" onclick="setFilter('week')">This Week</button>
+    <button class="filter-btn" onclick="setFilter('month')">This Month</button>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="kpi-grid">
+    <div class="kpi-card amber">
+      <div class="kpi-label">Total Conversations</div>
+      <div class="kpi-value amber" id="kpiTotal">—</div>
+      <div class="kpi-sub" id="kpiTotalSub">Loading...</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Resolution Rate</div>
+      <div class="kpi-value green" id="kpiResolution">—</div>
+      <div class="kpi-sub">First contact resolution</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-label">Avg. Satisfaction</div>
+      <div class="kpi-value purple" id="kpiSatisfaction">—</div>
+      <div class="kpi-sub">Out of 5 stars</div>
+    </div>
+    <div class="kpi-card amber">
+      <div class="kpi-label">Avg. Messages</div>
+      <div class="kpi-value" id="kpiMessages">—</div>
+      <div class="kpi-sub">Per conversation</div>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Top Reasons for Contact</div>
+      <div class="chart-container">
+        <canvas id="intentChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Busiest Hours of the Day</div>
+      <div class="chart-container">
+        <canvas id="hourlyChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI INSIGHTS -->
+  <div class="insights-card">
+    <div class="insights-header">
+      <div class="insights-title">🧠 AI-Generated Insights & Suggestions</div>
+      <span class="insights-badge">Powered by Gemini</span>
+    </div>
+    <div id="insightsContent">
+      <div class="insights-loading">
+        <div class="insights-spinner"></div>
+        Analyzing conversation patterns...
+      </div>
+    </div>
+  </div>
+
+  <!-- FEEDBACK + UNRESOLVED -->
+  <div class="bottom-grid">
+    <div class="section-card">
+      <div class="section-title">Recent Customer Feedback</div>
+      <div id="feedbackList">
+        <div class="empty-state">Loading feedback...</div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-title">Unresolved Conversations</div>
+      <div id="unresolvedList">
+        <div class="empty-state">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let analyticsData = null;
+  let currentFilter = 'week';
+  let intentChart = null;
+  let hourlyChart = null;
+
+  const INTENT_COLORS = {
+    billing: '#d4810a',
+    technical: '#6366f1',
+    orders: '#38a169',
+    product: '#0ea5e9',
+    feedback: '#ec4899',
+    general: '#9b9b9b'
+  };
+
+  async function loadAnalytics() {
+    try {
+      const res = await fetch('/api/analytics');
+      analyticsData = await res.json();
+      updateDashboard();
+      generateInsights();
+    } catch (e) {
+      console.error('Could not load analytics:', e);
+    }
+  }
+
+  function setFilter(filter) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    if (analyticsData) updateDashboard();
+  }
+
+  function updateDashboard() {
+    const d = analyticsData;
+    const f = currentFilter;
+
+    // KPI Cards
+    const total = d.totals[f] ?? d.totals.week;
+    const allTime = d.totals.all_time;
+    document.getElementById('kpiTotal').textContent = total;
+    document.getElementById('kpiTotalSub').textContent = `${allTime} all time`;
+
+    const res = d.resolution_rate[f];
+    document.getElementById('kpiResolution').textContent =
+      res !== null ? `${res}%` : 'N/A';
+
+    const sat = d.satisfaction[f];
+    document.getElementById('kpiSatisfaction').textContent =
+      sat !== null ? `${sat}★` : 'N/A';
+
+    const msgs = d.avg_messages[f];
+    document.getElementById('kpiMessages').textContent = msgs || '—';
+
+    // Intent pie chart
+    renderIntentChart(d.intent_breakdown);
+
+    // Hourly bar chart
+    renderHourlyChart(d.hourly_breakdown);
+
+    // Feedback
+    renderFeedback(d.recent_feedback);
+
+    // Unresolved
+    renderUnresolved(d.unresolved);
+  }
+
+  function renderIntentChart(breakdown) {
+    const labels = Object.keys(breakdown);
+    const values = Object.values(breakdown);
+    const colors = labels.map(l => INTENT_COLORS[l] || '#9b9b9b');
+
+    if (intentChart) intentChart.destroy();
+
+    const ctx = document.getElementById('intentChart').getContext('2d');
+    intentChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+        datasets: [{
+          data: values,
+          backgroundColor: colors,
+          borderWidth: 2,
+          borderColor: '#ffffff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: {
+              font: { family: 'DM Sans', size: 12 },
+              padding: 16,
+              usePointStyle: true
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function renderHourlyChart(hourly) {
+    const labels = Array.from({length: 24}, (_, i) => {
+      const h = i % 12 || 12;
+      return `${h}${i < 12 ? 'am' : 'pm'}`;
+    });
+    const values = Array.from({length: 24}, (_, i) => hourly[String(i)] || 0);
+
+    if (hourlyChart) hourlyChart.destroy();
+
+    const ctx = document.getElementById('hourlyChart').getContext('2d');
+    hourlyChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Conversations',
+          data: values,
+          backgroundColor: 'rgba(212,129,10,0.7)',
+          borderColor: '#d4810a',
+          borderWidth: 1,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { precision: 0, font: { family: 'DM Mono', size: 10 } },
+            grid: { color: 'rgba(0,0,0,0.05)' }
+          },
+          x: {
+            ticks: { font: { family: 'DM Mono', size: 9 }, maxRotation: 45 },
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  }
+
+  function renderFeedback(feedback) {
+    const container = document.getElementById('feedbackList');
+    if (!feedback || feedback.length === 0) {
+      container.innerHTML = '<div class="empty-state">No feedback yet.</div>';
+      return;
+    }
+    container.innerHTML = feedback.map(f => `
+      <div class="feedback-item">
+        <div class="feedback-stars">${'★'.repeat(f.rating || 0)}${'☆'.repeat(5 - (f.rating || 0))}</div>
+        <div>
+          <div class="feedback-comment">${escapeHtml(f.comment || 'No comment left.')}</div>
+          <div class="feedback-meta">${f.intent} · ${f.date} · Session ${f.session_id}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderUnresolved(unresolved) {
+    const container = document.getElementById('unresolvedList');
+    if (!unresolved || unresolved.length === 0) {
+      container.innerHTML = '<div class="empty-state">🎉 No unresolved conversations!</div>';
+      return;
+    }
+    container.innerHTML = unresolved.map(u => `
+      <div class="unresolved-item">
+        <div class="unresolved-intent">❌ ${u.intent}</div>
+        <div class="unresolved-msg">"${escapeHtml(u.last_message)}"</div>
+        <div class="unresolved-meta">${u.message_count} messages · ${u.date} · Session ${u.session_id}</div>
+      </div>
+    `).join('');
+  }
+
+  async function generateInsights() {
+    const container = document.getElementById('insightsContent');
+
+    if (!analyticsData) {
+      container.innerHTML = '<div class="insights-loading">No data available yet.</div>';
+      return;
+    }
+
+    try {
+      const d = analyticsData;
+      const intentBreakdown = d.intent_breakdown;
+      const topIntent = Object.entries(intentBreakdown)
+        .sort((a, b) => b[1] - a[1])[0];
+      const resRate = d.resolution_rate.week;
+      const unresolved = d.unresolved || [];
+      const totalWeek = d.totals.week;
+
+      const prompt = `You are an AI business analyst for a customer service chatbot platform.
+
+Here is the conversation data for this week:
+- Total conversations: ${totalWeek}
+- Top contact reason: ${topIntent ? topIntent[0] + ' (' + topIntent[1] + ' conversations)' : 'unknown'}
+- Resolution rate: ${resRate !== null ? resRate + '%' : 'unknown'}
+- Unresolved conversations: ${unresolved.length}
+- Intent breakdown: ${JSON.stringify(intentBreakdown)}
+- Recent unresolved issues: ${unresolved.slice(0, 3).map(u => u.intent + ': ' + u.last_message).join(' | ')}
+
+Generate exactly 3 specific, actionable insights for the business owner.
+Each insight should:
+1. Identify a specific pattern or problem
+2. Give a concrete suggestion to fix it
+
+Format as JSON array: [{"icon": "emoji", "text": "insight text with <strong>key phrase</strong> highlighted"}]
+Return ONLY the JSON array, no other text.`;
+
+      const res = await fetch('/api/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+
+      const data = await res.json();
+      const insights = data.insights || [];
+
+      if (insights.length === 0) {
+        container.innerHTML = '<div class="insights-loading">Not enough data for insights yet. Check back after more conversations.</div>';
+        return;
+      }
+
+      container.innerHTML = insights.map(insight => `
+        <div class="insight-item">
+          <div class="insight-icon">${insight.icon}</div>
+          <div class="insight-text">${insight.text}</div>
+        </div>
+      `).join('');
+
+    } catch (e) {
+      container.innerHTML = '<div class="insights-loading">Could not generate insights right now.</div>';
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str || ''));
+    return div.innerHTML;
+  }
+
+  loadAnalytics();
+</script>
+</body>
+</html>

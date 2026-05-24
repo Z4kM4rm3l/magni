@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Magni — Admin Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #faf7f2;
+      --bg-card: #ffffff;
+      --bg-dark: #1a1a2e;
+      --amber: #d4810a;
+      --amber-light: #f5a623;
+      --amber-dim: rgba(212,129,10,0.1);
+      --amber-glow: rgba(212,129,10,0.25);
+      --green: #38a169;
+      --green-dim: rgba(56,161,105,0.1);
+      --purple: #6366f1;
+      --purple-dim: rgba(99,102,241,0.1);
+      --text: #1a1a1a;
+      --text-dim: #6b6b6b;
+      --text-light: #9b9b9b;
+      --border: rgba(0,0,0,0.08);
+      --shadow: 0 2px 20px rgba(0,0,0,0.06);
+      --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+      --font-display: 'Fraunces', serif;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+    html, body {
+      min-height: 100vh; font-family: var(--font-body);
+      background: var(--bg-dark); color: white;
+      display: flex; flex-direction: column;
+    }
+
+    header {
+      padding: 1.5rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .header-brand { display: flex; align-items: center; gap: 0.8rem; }
+    .header-avatar {
+      width: 40px; height: 40px; border-radius: 50%; overflow: hidden;
+    }
+    .header-name { font-family: var(--font-display); font-size: 1.3rem; color: white; }
+    .header-badge {
+      font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.15em;
+      color: var(--amber-light); background: rgba(212,129,10,0.15);
+      border: 1px solid rgba(212,129,10,0.3); padding: 0.2rem 0.6rem;
+      border-radius: 20px; text-transform: uppercase;
+    }
+    .header-actions { display: flex; gap: 1rem; align-items: center; }
+    .header-actions a {
+      font-family: var(--font-mono); font-size: 0.75rem;
+      color: rgba(255,255,255,0.5); text-decoration: none; transition: color 0.2s;
+    }
+    .header-actions a:hover { color: white; }
+    .logout-btn {
+      font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1); padding: 0.4rem 0.9rem;
+      border-radius: 8px; text-decoration: none; transition: all 0.2s;
+    }
+    .logout-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+
+    .main {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .hub-title {
+      font-family: var(--font-display); font-size: 2.5rem;
+      font-weight: 600; text-align: center; margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
+    }
+    .hub-subtitle {
+      font-size: 0.9rem; color: rgba(255,255,255,0.45);
+      text-align: center; margin-bottom: 3rem;
+    }
+
+    .hub-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem; max-width: 900px; width: 100%;
+    }
+
+    .hub-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px; padding: 2rem;
+      text-decoration: none; color: white;
+      transition: all 0.25s; position: relative; overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .hub-card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+      opacity: 0; transition: opacity 0.25s;
+    }
+    .hub-card:hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(255,255,255,0.15);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+    }
+    .hub-card:hover::before { opacity: 1; }
+
+    .hub-card.amber::before { background: linear-gradient(90deg, var(--amber), var(--amber-light)); }
+    .hub-card.green::before { background: linear-gradient(90deg, #38a169, #68d391); }
+    .hub-card.purple::before { background: linear-gradient(90deg, #6366f1, #a5b4fc); }
+
+    .hub-card-icon {
+      font-size: 2.2rem; margin-bottom: 1.2rem;
+      width: 56px; height: 56px;
+      border-radius: 14px; display: flex;
+      align-items: center; justify-content: center;
+    }
+    .hub-card.amber .hub-card-icon { background: var(--amber-dim); }
+    .hub-card.green .hub-card-icon { background: var(--green-dim); }
+    .hub-card.purple .hub-card-icon { background: var(--purple-dim); }
+
+    .hub-card-title {
+      font-family: var(--font-display); font-size: 1.2rem;
+      font-weight: 600; margin-bottom: 0.5rem;
+    }
+    .hub-card-desc {
+      font-size: 0.82rem; color: rgba(255,255,255,0.45);
+      line-height: 1.6; flex: 1;
+    }
+    .hub-card-arrow {
+      font-family: var(--font-mono); font-size: 0.72rem;
+      letter-spacing: 0.1em; margin-top: 1.5rem;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .hub-card.amber .hub-card-arrow { color: var(--amber-light); }
+    .hub-card.green .hub-card-arrow { color: #68d391; }
+    .hub-card.purple .hub-card-arrow { color: #a5b4fc; }
+    .hub-card:hover .hub-card-arrow { opacity: 1; }
+
+    /* STATS ROW */
+    .stats-strip {
+      display: flex; gap: 2rem; margin-bottom: 2.5rem;
+      padding: 1.2rem 2rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px; max-width: 900px; width: 100%;
+    }
+    .strip-stat { text-align: center; flex: 1; }
+    .strip-value {
+      font-family: var(--font-display); font-size: 1.6rem;
+      color: var(--amber-light); line-height: 1;
+    }
+    .strip-label {
+      font-family: var(--font-mono); font-size: 0.62rem;
+      letter-spacing: 0.12em; color: rgba(255,255,255,0.35);
+      text-transform: uppercase; margin-top: 0.3rem;
+    }
+    .strip-divider {
+      width: 1px; background: rgba(255,255,255,0.08);
+      align-self: stretch;
+    }
+
+    footer {
+      text-align: center; padding: 1.5rem;
+      font-family: var(--font-mono); font-size: 0.65rem;
+      letter-spacing: 0.1em; color: rgba(255,255,255,0.2);
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 768px) {
+      .hub-grid { grid-template-columns: 1fr; }
+      .stats-strip { flex-wrap: wrap; gap: 1rem; }
+      .strip-divider { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <div class="header-avatar">
+      <svg viewBox="130 80 420 530" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">
+        <rect x="130" y="80" width="420" height="530" fill="#1e2d1a"/>
+        <rect x="130" y="80" width="420" height="510" rx="30" fill="#6a6258"/>
+        <ellipse cx="248" cy="310" rx="62" ry="50" fill="#1a1510"/>
+        <ellipse cx="432" cy="310" rx="62" ry="50" fill="#1a1510"/>
+        <ellipse cx="248" cy="310" rx="38" ry="32" fill="#d4810a"/>
+        <ellipse cx="432" cy="310" rx="38" ry="32" fill="#d4810a"/>
+        <ellipse cx="248" cy="310" rx="24" ry="20" fill="#ffcc44"/>
+        <ellipse cx="432" cy="310" rx="24" ry="20" fill="#ffcc44"/>
+        <ellipse cx="248" cy="310" rx="12" ry="12" fill="#1a0800"/>
+        <ellipse cx="432" cy="310" rx="12" ry="12" fill="#1a0800"/>
+        <circle cx="258" cy="300" r="5" fill="white"/>
+        <circle cx="442" cy="300" r="5" fill="white"/>
+        <path d="M220 490 Q340 518 460 490" fill="none" stroke="#2a2820" stroke-width="5" stroke-linecap="round"/>
+        <path d="M138 430 C122 390 118 330 132 270" fill="none" stroke="#3a7a2a" stroke-width="4" stroke-linecap="round"/>
+        <path d="M542 428 C558 388 562 328 548 268" fill="none" stroke="#3a7a2a" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="header-name">Magni</div>
+    <span class="header-badge">Admin Hub</span>
+  </div>
+  <div class="header-actions">
+    <a href="/">← Back to Chat</a>
+    <a href="/admin/logout" class="logout-btn">Sign Out</a>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- LIVE STATS STRIP -->
+  <div class="stats-strip" id="statsStrip">
+    <div class="strip-stat">
+      <div class="strip-value" id="statMRR">—</div>
+      <div class="strip-label">Monthly Recurring Revenue</div>
+    </div>
+    <div class="strip-divider"></div>
+    <div class="strip-stat">
+      <div class="strip-value" id="statActive">—</div>
+      <div class="strip-label">Active Clients</div>
+    </div>
+    <div class="strip-divider"></div>
+    <div class="strip-stat">
+      <div class="strip-value" id="statKB">—</div>
+      <div class="strip-label">KB Articles</div>
+    </div>
+    <div class="strip-divider"></div>
+    <div class="strip-stat">
+      <div class="strip-value" id="statTiers">—</div>
+      <div class="strip-label">S / P / E Breakdown</div>
+    </div>
+  </div>
+
+  <div class="hub-title">What would you like to manage?</div>
+  <p class="hub-subtitle">Select a section to get started.</p>
+
+  <div class="hub-grid">
+
+    <a href="/admin/kb" class="hub-card amber">
+      <div class="hub-card-icon">📚</div>
+      <div class="hub-card-title">Knowledge Base</div>
+      <div class="hub-card-desc">Add and manage articles, FAQs, and policies that Magni uses to answer customer questions accurately.</div>
+      <div class="hub-card-arrow">→ Open KB Manager</div>
+    </a>
+
+    <a href="/admin/clients" class="hub-card green">
+      <div class="hub-card-icon">🏢</div>
+      <div class="hub-card-title">Client Accounts</div>
+      <div class="hub-card-desc">Create, manage, suspend, and upgrade client subscriptions. Track conversation usage and billing dates.</div>
+      <div class="hub-card-arrow">→ Open Client Manager</div>
+    </a>
+
+    <a href="/admin/analytics" class="hub-card purple">
+      <div class="hub-card-icon">📊</div>
+      <div class="hub-card-title">Analytics</div>
+      <div class="hub-card-desc">View conversation trends, resolution rates, satisfaction scores, and trending issues with AI suggestions.</div>
+      <div class="hub-card-arrow">→ Open Analytics</div>
+    </a>
+
+  </div>
+</main>
+
+<footer>Magni &nbsp;·&nbsp; Magni AI Platform &nbsp;·&nbsp; Internal Admin</footer>
+
+<script>
+  async function loadStats() {
+    try {
+      const [clientRes, kbRes] = await Promise.all([
+        fetch('/api/clients'),
+        fetch('/api/kb')
+      ]);
+      const clientData = await clientRes.json();
+      const kbData = await kbRes.json();
+
+      const stats = clientData.stats || {};
+      document.getElementById('statMRR').textContent =
+        stats.mrr ? `$${stats.mrr.toLocaleString()}` : '$0';
+      document.getElementById('statActive').textContent = stats.active ?? '0';
+      document.getElementById('statKB').textContent =
+        (kbData.articles || []).length;
+      const t = stats.by_tier || {};
+      document.getElementById('statTiers').textContent =
+        `${t.starter||0} / ${t.professional||0} / ${t.enterprise||0}`;
+    } catch (e) {
+      console.error('Could not load stats:', e);
+    }
+  }
+  loadStats();
+</script>
+</body>
+</html>

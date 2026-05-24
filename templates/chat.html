@@ -618,8 +618,52 @@
 
     .btn-submit:hover { opacity: 0.9; }
 
-    /* ── RESPONSIVE ── */
-    @media (max-width: 768px) {
+
+    /* ── RESOLUTION BAR ── */
+    .resolution-bar {
+      display: none;
+      align-self: center;
+      background: var(--magni-bubble);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 0.7rem 1.2rem;
+      box-shadow: var(--shadow);
+      animation: slideIn 0.3s ease forwards;
+      text-align: center;
+      max-width: 360px;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.8rem;
+    }
+    .resolution-bar.visible { display: flex; align-items: center; }
+    .resolution-question { font-size: 0.82rem; color: var(--text-dim); white-space: nowrap; }
+    .resolution-btns { display: flex; gap: 0.5rem; }
+    .resolution-btn {
+      font-family: var(--font-body); font-size: 0.78rem; font-weight: 500;
+      padding: 0.4rem 1rem; border-radius: 20px; border: none; cursor: pointer; transition: all 0.2s;
+    }
+    .resolution-btn.yes { background: rgba(56,161,105,0.12); color: #38a169; border: 1px solid rgba(56,161,105,0.25); }
+    .resolution-btn.yes:hover { background: rgba(56,161,105,0.22); }
+    .resolution-btn.no { background: rgba(229,62,62,0.1); color: #e53e3e; border: 1px solid rgba(229,62,62,0.2); }
+    .resolution-btn.no:hover { background: rgba(229,62,62,0.18); }
+
+    .admin-link {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.15);
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color 0.2s;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .admin-link:hover { color: var(--cyan); }
       .app { grid-template-columns: 1fr; }
       .sidebar { display: none; }
       .messages-container { padding: 1rem; }
@@ -826,6 +870,16 @@
       </div>
     </div>
 
+
+    <!-- Resolution bar -->
+    <div class="resolution-bar" id="resolutionBar">
+      <span class="resolution-question">Did we solve your issue today?</span>
+      <div class="resolution-btns">
+        <button class="resolution-btn yes" onclick="submitResolution(true)">✅ Yes</button>
+        <button class="resolution-btn no" onclick="submitResolution(false)">❌ No</button>
+      </div>
+    </div>
+
     <div class="input-area">
       <div class="input-wrapper">
         <textarea
@@ -865,6 +919,9 @@
     </div>
   </div>
 </div>
+
+<!-- Subtle admin link -->
+<a href="/admin/login" class="admin-link">🔒 Admin</a>
 
 <script>
   function magniSVG() {
@@ -1023,9 +1080,9 @@
         addMessage("I'm having trouble responding right now. Please try again.", 'magni');
       }
 
-      if (messageCount >= 5 && !feedbackShown) {
+      if (messageCount >= 4 && !feedbackShown) {
         feedbackShown = true;
-        setTimeout(showFeedback, 1500);
+        setTimeout(showResolutionBar, 1000);
       }
 
     } catch (err) {
@@ -1065,6 +1122,8 @@
       </div>`;
 
     document.getElementById('intentBadge').classList.remove('visible');
+    document.getElementById('resolutionBar').classList.remove('visible');
+    resolutionSubmitted = false;
   }
 
   function showFeedback() {
@@ -1095,6 +1154,32 @@
 
     closeFeedback();
     addMessage("Thank you for your feedback! It genuinely helps me improve. 😊", 'magni');
+  }
+
+
+  let resolutionSubmitted = false;
+
+  function showResolutionBar() {
+    if (resolutionSubmitted) return;
+    const bar = document.getElementById('resolutionBar');
+    bar.classList.add('visible');
+  }
+
+  async function submitResolution(resolved) {
+    resolutionSubmitted = true;
+    const bar = document.getElementById('resolutionBar');
+    bar.innerHTML = resolved
+      ? '<span style="font-size:0.82rem;color:#38a169;">✅ Great! Glad we could help.</span>'
+      : '<span style="font-size:0.82rem;color:#e53e3e;">❌ Sorry to hear that. We\'ll keep improving.</span>';
+
+    await fetch('/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, resolved })
+    });
+
+    // Show feedback modal after short delay
+    setTimeout(showFeedback, 1500);
   }
 
   // Star rating
