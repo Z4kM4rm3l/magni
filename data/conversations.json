@@ -58,5 +58,121 @@
     "feedback_comment": "Great job!",
     "date": "2026-05-24",
     "hour": 13
+  },
+  {
+    "session_id": "542d18be-44f5-4124-a6fb-5b4be0c0a9f7",
+    "started_at": 1779633167.1655145,
+    "ended_at": 1779633288.34797,
+    "message_count": 8,
+    "intents": [
+      "billing",
+      "general",
+      "product"
+    ],
+    "primary_intent": "billing",
+    "messages": [
+      {
+        "role": "user",
+        "content": "why is my bill so high",
+        "timestamp": 1779633169.8056016
+      },
+      {
+        "role": "assistant",
+        "content": "I understand your concern about a higher-than-expected bill. It can definitely be unsettling to see an amount that seems incorrect, and I want to help clarify things for you.\n\nWhile I can't access specific account details here to tell you exactly why your bill is high, common reasons can include increased usage, a promotional period ending, one-time charges, or a change in your service plan.\n\nTo get a precise breakdown and understand each charge on your bill, the best approach is often to review your detailed bill statement directly through your online account portal. You can usually find a clear explanation of all charges there.\n\nWould you like me to guide you on how to access your online account, or would you prefer I connect you with a billing specialist who *can* securely access your details and walk through your bill with you?",
+        "timestamp": 1779633169.824321
+      },
+      {
+        "role": "user",
+        "content": "yes",
+        "timestamp": 1779633225.8115249
+      },
+      {
+        "role": "assistant",
+        "content": "Thank you for clarifying! To make sure I help you in the best way, could you please let me know if you'd like me to:\n\n1.  **Guide you on how to access your online account** to view your detailed bill yourself?\n2.  **Connect you with a billing specialist** who can securely access your account and review the charges with you directly?\n\nOnce I know which option you prefer, I can take the next step to assist you.",
+        "timestamp": 1779633225.8303652
+      },
+      {
+        "role": "user",
+        "content": "how to do it myself",
+        "timestamp": 1779633238.4770367
+      },
+      {
+        "role": "assistant",
+        "content": "Great choice! Accessing your bill online is usually the quickest way to see all the details. Here's a general guide on how to do it yourself:\n\n1.  **Visit the Company Website:** Open your web browser and go to the official website of the service provider (e.g., your internet, phone, or utility company).\n2.  **Look for \"Login\" or \"My Account\":** On the homepage, you'll typically find a button or link that says \"Login,\" \"Sign In,\" or \"My Account.\" Click on that.\n3.  **Enter Your Credentials:** You'll be prompted to enter your username and password. If you haven't created an online account before, there's usually an option to \"Register\" or \"Create Account\" – you'll need your account number handy for that.\n4.  **Navigate to Billing:** Once logged in, look for a section like \"Billing,\" \"My Bills,\" \"Statements,\" or \"Usage.\" This is where you'll find your current and past statements, often with a detailed breakdown of charges.\n\nIf you run into any trouble finding the login page or navigating once you're in, please let me know! I'm here to help if you get stuck.",
+        "timestamp": 1779633238.4991171
+      },
+      {
+        "role": "user",
+        "content": "how to navigate to billing",
+        "timestamp": 1779633280.4101596
+      },
+      {
+        "role": "assistant",
+        "content": "Certainly! Once you've successfully logged into your online account, the specific names for the billing section can vary a bit between different service providers, but here are the most common places to look:\n\n1.  **Main Navigation Menu:** Check the top or side of the page for links like:\n    *   \"Billing\"\n    *   \"My Bills\"\n    *   \"Statements\"\n    *   \"Account Summary\" (often has a billing sub-section)\n    *   \"Usage & Bills\"\n\n2.  **Dashboard/Homepage Widgets:** Sometimes, after logging in, you'll see a dashboard with a quick overview. There might be a dedicated widget or card displaying your \"Current Bill\" or \"Balance Due\" that you can click on for more details.\n\n3.  **Dropdown Menus:** If there's a menu for \"My Account\" or your name, click on it, and you'll likely see \"Billing\" or \"Statements\" as an option.\n\nIf you've checked these areas and are still having trouble locating your detailed bill, please don't hesitate to let me know! I can also connect you with a billing specialist who can securely guide you through your specific account.",
+        "timestamp": 1779633280.4323575
+      }
+    ],
+    "resolved": false,
+    "resolution_source": "customer",
+    "rating": null,
+    "feedback_comment": "",
+    "date": "2026-05-24",
+    "hour": 14
+  },
+  {
+    "session_id": "55c36dd7-99ce-4f78-b0bc-efe4ae58e56b",
+    "started_at": 1779678840.6823368,
+    "ended_at": 1779678842.3943226,
+    "message_count": 2,
+    "intents": [
+      "general"
+    ],
+    "primary_intent": "general",
+    "messages": [
+      {
+        "role": "user",
+        "content": "T",
+        "timestamp": 1779678842.3826332
+      },
+      {
+        "role": "assistant",
+        "content": "Hello there! It looks like you might have started typing, or perhaps that was an accidental key press.\n\nNo worries at all! Please let me know how I can assist you today. I'm here to help.",
+        "timestamp": 1779678842.3943205
+      }
+    ],
+    "resolved": null,
+    "resolution_source": null,
+    "rating": null,
+    "feedback_comment": "",
+    "date": "2026-05-25",
+    "hour": 3
+  },
+  {
+    "session_id": "049d71c9-13aa-4b9e-85bf-b78acb1097b6",
+    "started_at": 1779679104.0945864,
+    "ended_at": 1779679105.5243578,
+    "message_count": 2,
+    "intents": [
+      "general"
+    ],
+    "primary_intent": "general",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello how are you",
+        "timestamp": 1779679105.5152278
+      },
+      {
+        "role": "assistant",
+        "content": "Hello there! I'm doing well, thank you for asking.\n\nHow can I assist you today? Please let me know what you need help with!",
+        "timestamp": 1779679105.5243561
+      }
+    ],
+    "resolved": null,
+    "resolution_source": null,
+    "rating": null,
+    "feedback_comment": "",
+    "date": "2026-05-25",
+    "hour": 3
   }
 ]

@@ -1,0 +1,59 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%;">
+  <defs>
+    <radialGradient id="micBg" cx="50%" cy="30%" r="85%">
+      <stop offset="0%" stop-color="#ff9940"/>
+      <stop offset="30%" stop-color="#e05510"/>
+      <stop offset="60%" stop-color="#8a2a50"/>
+      <stop offset="100%" stop-color="#0e0520"/>
+    </radialGradient>
+    <radialGradient id="micSun" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="25%" stop-color="#fff4a0"/>
+      <stop offset="60%" stop-color="#ffaa00" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#ff6600" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="micPyL" cx="15%" cy="0%" r="100%">
+      <stop offset="0%" stop-color="#e8a030"/>
+      <stop offset="100%" stop-color="#7a4a00"/>
+    </radialGradient>
+    <radialGradient id="micPyR" cx="85%" cy="0%" r="100%">
+      <stop offset="0%" stop-color="#6a3800"/>
+      <stop offset="100%" stop-color="#2a1200"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <circle cx="32" cy="32" r="30" fill="url(#micBg)"/>
+
+  <!-- Horizon glow -->
+  <ellipse cx="32" cy="46" rx="30" ry="12" fill="#ff7730" opacity="0.4"/>
+
+  <!-- Stars -->
+  <g fill="white">
+    <circle cx="10" cy="10" r="1.2" opacity="0.75"/>
+    <circle cx="50" cy="8"  r="1.4" opacity="0.85"/>
+    <circle cx="28" cy="5"  r="0.9" opacity="0.65"/>
+    <circle cx="56" cy="18" r="1.0" opacity="0.7"/>
+    <circle cx="7"  cy="22" r="0.9" opacity="0.65"/>
+  </g>
+
+  <!-- Sun glow at apex -->
+  <circle cx="36" cy="20" r="14" fill="url(#micSun)" opacity="0.45"/>
+  <circle cx="36" cy="20" r="8"  fill="#fff8d0" opacity="0.95"/>
+  <circle cx="36" cy="20" r="5"  fill="white"/>
+
+  <!-- Pyramid left face -->
+  <polygon points="36,20 16,46 36,46" fill="url(#micPyL)"/>
+  <!-- Pyramid right face -->
+  <polygon points="36,20 56,46 36,46" fill="url(#micPyR)"/>
+  <!-- Left edge highlight -->
+  <line x1="36" y1="20" x2="16" y2="46" stroke="#ffcc44" stroke-width="0.8" opacity="0.6"/>
+  <!-- Right edge shadow -->
+  <line x1="36" y1="20" x2="56" y2="46" stroke="#8a4400" stroke-width="0.8" opacity="0.4"/>
+
+  <!-- Ground -->
+  <ellipse cx="36" cy="47" rx="22" ry="3.5" fill="#2a1408" opacity="0.9"/>
+
+  <!-- Border ring -->
+  <circle cx="32" cy="32" r="30" fill="none" stroke="#d4820a" stroke-width="2" opacity="0.9"/>
+</svg>

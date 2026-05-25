@@ -1,0 +1,12 @@
+{
+  "name": "Magni AI Customer Service",
+  "short_name": "Magni",
+  "description": "AI-powered customer service agent by Lemram Industries",
+  "icons": [
+    { "src": "/static/icons/magni-micro.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "theme_color": "#08081a",
+  "background_color": "#08081a",
+  "display": "standalone",
+  "start_url": "/"
+}
