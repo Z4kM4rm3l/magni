@@ -1,7 +1,6 @@
 import os
 import uuid
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
-from flask_cors import CORS
 from dotenv import load_dotenv
 
 from core.api_client import get_magni_response
@@ -22,14 +21,20 @@ from core.client_manager import (
     update_client, suspend_client, reactivate_client,
     delete_client, get_client_stats
 )
-from core.auth import login_required, check_credentials
+from core.auth import login_required, api_login_required, attempt_login, logout, get_safe_redirect
+from core.security import apply_security_headers
 from core.utils import sanitize_input, logger
 
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "magni-dev-secret")
-CORS(app)
+app.secret_key = os.getenv("SECRET_KEY", "")
+if not app.secret_key:
+    raise RuntimeError("SECRET_KEY environment variable is not set. Cannot start safely.")
+app.config["SESSION_COOKIE_SECURE"]   = True   # HTTPS only
+app.config["SESSION_COOKIE_HTTPONLY"]  = True   # No JS access to cookie
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
+apply_security_headers(app)
 
 # ── CHAT ROUTES ──────────────────────────────────────────────
 
@@ -119,7 +124,7 @@ def reset():
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "agent": "Magni"})
+    return jsonify({"status": "ok"})
 
 # ── AUTH ROUTES ──────────────────────────────────────────────
 
@@ -143,35 +148,35 @@ def admin_logout():
 # ── ADMIN HUB ────────────────────────────────────────────────
 
 @app.route("/admin")
-@login_required
+@api_login_required
 def admin_hub():
     return render_template("hub.html")
 
 @app.route("/admin/kb")
-@login_required
+@api_login_required
 def admin_kb():
     return render_template("admin.html")
 
 @app.route("/admin/clients")
-@login_required
+@api_login_required
 def admin_clients():
     return render_template("clients.html")
 
 @app.route("/admin/analytics")
-@login_required
+@api_login_required
 def admin_analytics():
     return render_template("analytics.html")
 
 # ── KNOWLEDGE BASE ROUTES ─────────────────────────────────────
 
 @app.route("/api/kb", methods=["GET"])
-@login_required
+@api_login_required
 def kb_list():
     articles = get_all_articles()
     return jsonify({"articles": articles, "categories": get_categories()})
 
 @app.route("/api/kb", methods=["POST"])
-@login_required
+@api_login_required
 def kb_create():
     data = request.get_json()
     if not data or not data.get("title") or not data.get("content"):
@@ -189,7 +194,7 @@ def kb_create():
     return jsonify({"article": article}), 201
 
 @app.route("/api/kb/<article_id>", methods=["GET"])
-@login_required
+@api_login_required
 def kb_get(article_id):
     article = get_article(article_id)
     if not article:
@@ -197,7 +202,7 @@ def kb_get(article_id):
     return jsonify({"article": article})
 
 @app.route("/api/kb/<article_id>", methods=["PUT"])
-@login_required
+@api_login_required
 def kb_update(article_id):
     data = request.get_json()
     if not data or not data.get("title") or not data.get("content"):
@@ -215,7 +220,7 @@ def kb_update(article_id):
     return jsonify({"article": article})
 
 @app.route("/api/kb/<article_id>", methods=["DELETE"])
-@login_required
+@api_login_required
 def kb_delete(article_id):
     success = delete_article(article_id)
     if not success:
@@ -225,14 +230,14 @@ def kb_delete(article_id):
 # ── CLIENT MANAGEMENT ROUTES ──────────────────────────────────
 
 @app.route("/api/clients", methods=["GET"])
-@login_required
+@api_login_required
 def clients_list():
     clients = get_all_clients()
     stats = get_client_stats()
     return jsonify({"clients": clients, "stats": stats})
 
 @app.route("/api/clients", methods=["POST"])
-@login_required
+@api_login_required
 def clients_create():
     data = request.get_json()
     if not data or not data.get("business_name") or not data.get("email"):
@@ -254,7 +259,7 @@ def clients_create():
     return jsonify({"client": client}), 201
 
 @app.route("/api/clients/<client_id>", methods=["PUT"])
-@login_required
+@api_login_required
 def clients_update(client_id):
     data = request.get_json()
     if not data:
@@ -273,7 +278,7 @@ def clients_update(client_id):
     return jsonify({"client": client})
 
 @app.route("/api/clients/<client_id>/suspend", methods=["POST"])
-@login_required
+@api_login_required
 def clients_suspend(client_id):
     client = suspend_client(client_id)
     if not client:
@@ -281,7 +286,7 @@ def clients_suspend(client_id):
     return jsonify({"client": client})
 
 @app.route("/api/clients/<client_id>/activate", methods=["POST"])
-@login_required
+@api_login_required
 def clients_activate(client_id):
     client = reactivate_client(client_id)
     if not client:
@@ -289,7 +294,7 @@ def clients_activate(client_id):
     return jsonify({"client": client})
 
 @app.route("/api/clients/<client_id>", methods=["DELETE"])
-@login_required
+@api_login_required
 def clients_delete(client_id):
     success = delete_client(client_id)
     if not success:
@@ -299,7 +304,7 @@ def clients_delete(client_id):
 # ── ANALYTICS ROUTES ──────────────────────────────────────────
 
 @app.route("/api/insights", methods=["POST"])
-@login_required
+@api_login_required
 def ai_insights():
     """Generate AI-powered insights from analytics data."""
     import google.generativeai as genai
@@ -321,13 +326,13 @@ def ai_insights():
         return jsonify({"insights": []}), 500
 
 @app.route("/api/analytics", methods=["GET"])
-@login_required
+@api_login_required
 def analytics_data():
     data = get_analytics_data()
     return jsonify(data)
 
 @app.route("/api/analytics/conversations", methods=["GET"])
-@login_required
+@api_login_required
 def analytics_conversations():
     conversations = get_all_conversations()
     # Return last 50, newest first, without full message content
