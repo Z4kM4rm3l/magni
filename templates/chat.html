@@ -14,1024 +14,602 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-    /* ── Magni Brand Colors ── */
-    --magni-midnight: #08081a;
-    --magni-deep-sky: #1a1a3a;
-    --magni-gold: #fbdc64;
-    --magni-amber: #9a5a00;
-    --magni-oasis: #2a4a8a;
-    --magni-gold-light: #ffe566;
-    --magni-gold-glow: rgba(251,220,100,0.25);
-
-      --bg: #faf7f2;
-      --bg-card: #ffffff;
-      --bg-sidebar: #1a1a2e;
-      --amber: #d4810a;
-      --amber-light: #f5a623;
-      --amber-dim: rgba(212, 129, 10, 0.12);
-      --amber-glow: rgba(212, 129, 10, 0.25);
-      --sage: #5a7a6a;
-      --sage-dim: rgba(90, 122, 106, 0.12);
-      --text: #1a1a1a;
-      --text-dim: #6b6b6b;
-      --text-light: #9b9b9b;
-      --border: rgba(0,0,0,0.08);
-      --border-strong: rgba(0,0,0,0.14);
-      --user-bubble: #1a1a2e;
-      --magni-bubble: #ffffff;
-      --font-display: 'Fraunces', serif;
-      --font-body: 'DM Sans', sans-serif;
-      --font-mono: 'DM Mono', monospace;
-      --shadow: 0 2px 20px rgba(0,0,0,0.06);
-      --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+      /* ── Magni Brand Colors ── */
+      --magni-midnight: #08081a;
+      --magni-deep-sky: #1a1a3a;
+      --magni-gold: #fbdc64;
+      --magni-amber: #9e7e1e;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --glass-bg: rgba(26, 26, 58, 0.45);
+      --glass-border: rgba(251, 220, 100, 0.15);
+      --glass-focus: rgba(251, 220, 100, 0.3);
     }
 
-    html, body {
-      height: 100%;
-      font-family: var(--font-body);
-      background: var(--bg);
-      color: var(--text);
-      overflow: hidden;
-    }
-
-    /* ── LAYOUT ── */
-    .app {
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      height: 100vh;
-    }
-
-    /* ── SIDEBAR ── */
-    .sidebar {
-      background: var(--bg-sidebar);
-      display: flex;
-      flex-direction: column;
-      padding: 2rem 1.5rem;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .sidebar::before {
-      content: '';
-      position: absolute;
-      top: -60px; right: -60px;
-      width: 200px; height: 200px;
-      background: radial-gradient(circle, rgba(212,129,10,0.15) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .sidebar::after {
-      content: '';
-      position: absolute;
-      bottom: -40px; left: -40px;
-      width: 160px; height: 160px;
-      background: radial-gradient(circle, rgba(90,122,106,0.1) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .brand {
-      margin-bottom: 2.5rem;
-      position: relative;
-      z-index: 1;
-    }
-
-    .brand-icon {
-      width: 56px; height: 56px;
-      border-radius: 50%;
-      margin-bottom: 0.8rem;
-      overflow: hidden;
-      box-shadow: 0 4px 16px var(--amber-glow);
-      flex-shrink: 0;
-    }
-
-    .brand-icon svg { width: 100%; height: 100%; }
-
-    .brand-name {
-      font-family: var(--font-display);
-      font-size: 1.8rem;
-      font-weight: 600;
-      color: #ffffff;
-      letter-spacing: -0.02em;
-      line-height: 1;
-    }
-
-    .brand-tagline {
-      font-size: 0.75rem;
-      color: rgba(255,255,255,0.4);
-      letter-spacing: 0.05em;
-      margin-top: 0.2rem;
-      font-weight: 300;
-    }
-
-    .sidebar-label {
-      font-size: 0.65rem;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.3);
-      margin-bottom: 0.8rem;
-      font-weight: 500;
-      position: relative;
-      z-index: 1;
-    }
-
-    .quick-topics {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      margin-bottom: 2rem;
-      position: relative;
-      z-index: 1;
-    }
-
-    .topic-btn {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
-      color: rgba(255,255,255,0.7);
-      padding: 0.7rem 1rem;
-      border-radius: 10px;
-      font-family: var(--font-body);
-      font-size: 0.82rem;
-      font-weight: 400;
-      cursor: pointer;
-      text-align: left;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-    }
-
-    .topic-btn:hover {
-      background: rgba(212,129,10,0.15);
-      border-color: rgba(212,129,10,0.3);
-      color: #ffffff;
-      transform: translateX(3px);
-    }
-
-    .topic-icon {
-      font-size: 0.9rem;
-      opacity: 0.8;
-    }
-
-    .sidebar-footer {
-      margin-top: auto;
-      position: relative;
-      z-index: 1;
-    }
-
-    .new-chat-btn {
-      width: 100%;
-      background: rgba(212,129,10,0.15);
-      border: 1px solid rgba(212,129,10,0.25);
-      color: var(--amber-light);
-      padding: 0.8rem;
-      border-radius: 10px;
-      font-family: var(--font-body);
-      font-size: 0.82rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-    }
-
-    .new-chat-btn:hover {
-      background: rgba(212,129,10,0.25);
-      border-color: rgba(212,129,10,0.4);
-    }
-
-    .status-indicator {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-top: 1rem;
-      font-size: 0.72rem;
-      color: rgba(255,255,255,0.3);
-    }
-
-    .status-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: #4ade80;
-      animation: pulse-dot 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    /* ── MAIN CHAT ── */
-    .chat-main {
+    body {
+      background-color: var(--magni-midnight);
+      color: var(--text-main);
+      font-family: 'DM Sans', sans-serif;
       display: flex;
       flex-direction: column;
       height: 100vh;
-      background: var(--bg);
+      overflow: hidden;
     }
 
-    .chat-header {
-      padding: 1.2rem 2rem;
-      border-bottom: 1px solid var(--border);
+    header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: var(--bg-card);
-      box-shadow: var(--shadow);
+      padding: 1.25rem 2rem;
+      background: rgba(8, 8, 26, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--glass-border);
+      z-index: 10;
     }
 
-    .chat-header-left {
+    .brand {
       display: flex;
       align-items: center;
-      gap: 0.8rem;
+      gap: 0.75rem;
     }
 
-    .magni-avatar {
-      width: 38px; height: 38px;
-      border-radius: 50%;
-      overflow: hidden;
-      flex-shrink: 0;
+    .brand-logo {
+      width: 32px;
+      height: 32px;
     }
 
-    .magni-avatar svg { width: 100%; height: 100%; }
-
-    .chat-header-info h2 {
-      font-family: var(--font-display);
-      font-size: 1.05rem;
+    .brand-title {
+      font-family: 'Fraunces', serif;
       font-weight: 600;
-      color: var(--text);
-      letter-spacing: -0.01em;
+      font-size: 1.5rem;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
     }
 
-    .chat-header-info p {
-      font-size: 0.72rem;
-      color: var(--text-light);
-      margin-top: 0.1rem;
-    }
-
-    .intent-badge {
-      font-family: var(--font-mono);
-      font-size: 0.65rem;
-      letter-spacing: 0.08em;
-      color: var(--amber);
-      background: var(--amber-dim);
-      border: 1px solid rgba(212,129,10,0.2);
-      padding: 0.25rem 0.6rem;
-      border-radius: 20px;
+    .brand-tag {
+      font-size: 0.75rem;
+      font-family: 'DM Mono', monospace;
+      color: var(--magni-gold);
+      border: 1px solid rgba(251, 220, 100, 0.3);
+      padding: 0.15rem 0.5rem;
+      border-radius: 9999px;
       text-transform: uppercase;
-      display: none;
     }
 
-    .intent-badge.visible { display: inline-block; }
-
-    /* ── MESSAGES ── */
-    .messages-container {
+    main {
       flex: 1;
-      overflow-y: auto;
-      padding: 2rem;
       display: flex;
       flex-direction: column;
-      gap: 1.2rem;
-      scroll-behavior: smooth;
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1.5rem 1.5rem 0 1.5rem;
+      overflow: hidden;
     }
 
-    .messages-container::-webkit-scrollbar { width: 4px; }
-    .messages-container::-webkit-scrollbar-track { background: transparent; }
-    .messages-container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+    #chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* Custom Scrollbar */
+    #chat-container::-webkit-scrollbar { width: 6px; }
+    #chat-container::-webkit-scrollbar-track { background: transparent; }
+    #chat-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 9999px; }
+    #chat-container::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
     .message {
+      max-width: 80%;
       display: flex;
-      gap: 0.8rem;
-      animation: slideIn 0.3s ease forwards;
-      max-width: 78%;
+      flex-direction: column;
+      animation: fadeIn 0.3s ease-out forwards;
     }
 
-    @keyframes slideIn {
+    @keyframes fadeIn {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
     .message.user {
       align-self: flex-end;
-      flex-direction: row-reverse;
     }
 
-    .message.magni { align-self: flex-start; }
-
-    .msg-avatar {
-      width: 32px; height: 32px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.9rem;
-      margin-top: 2px;
-    }
-
-    .message.magni .msg-avatar {
-      background: linear-gradient(135deg, var(--amber), var(--amber-light));
-    }
-
-    .message.user .msg-avatar {
-      background: var(--bg-sidebar);
-      color: rgba(255,255,255,0.8);
-      font-size: 0.75rem;
-      font-family: var(--font-mono);
-    }
-
-    .msg-bubble {
-      padding: 0.9rem 1.1rem;
-      border-radius: 18px;
-      font-size: 0.9rem;
-      line-height: 1.65;
-      position: relative;
-    }
-
-    .message.magni .msg-bubble {
-      background: var(--magni-bubble);
-      border: 1px solid var(--border);
-      border-bottom-left-radius: 4px;
-      color: var(--text);
-      box-shadow: var(--shadow);
-    }
-
-    .message.user .msg-bubble {
-      background: var(--user-bubble);
-      color: rgba(255,255,255,0.92);
-      border-bottom-right-radius: 4px;
-    }
-
-    .msg-time {
-      font-size: 0.65rem;
-      color: var(--text-light);
-      margin-top: 0.3rem;
-      text-align: right;
-    }
-
-    .message.magni .msg-time { text-align: left; }
-
-    /* ── TYPING INDICATOR ── */
-    .typing-indicator {
-      display: none;
+    .message.magni {
       align-self: flex-start;
-      align-items: center;
-      gap: 0.8rem;
     }
 
-    .typing-indicator.visible { display: flex; }
+    .message-bubble {
+      padding: 0.95rem 1.25rem;
+      border-radius: 1.25rem;
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }
 
-    .typing-dots {
-      background: var(--magni-bubble);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      border-bottom-left-radius: 4px;
-      padding: 0.9rem 1.1rem;
+    .message.user .message-bubble {
+      background: var(--magni-deep-sky);
+      border: 1px solid var(--glass-border);
+      border-bottom-right-radius: 0.25rem;
+      color: var(--text-main);
+    }
+
+    .message.magni .message-bubble {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-bottom-left-radius: 0.25rem;
+      color: #e5e7eb;
+    }
+
+    /* Markdown styling inside bubbles */
+    .message-bubble p { margin-bottom: 0.75rem; }
+    .message-bubble p:last-child { margin-bottom: 0; }
+    .message-bubble code { font-family: 'DM Mono', monospace; background: rgba(0,0,0,0.3); padding: 0.15rem 0.3rem; border-radius: 4px; font-size: 0.85rem; color: var(--magni-gold); }
+    .message-bubble pre { background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; overflow-x: auto; margin: 0.75rem 0; border: 1px solid rgba(255,255,255,0.05); }
+    .message-bubble pre code { background: transparent; padding: 0; color: inherit; }
+    .message-bubble ul, .message-bubble ol { margin-left: 1.25rem; margin-bottom: 0.75rem; }
+
+    .message-time {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .message.user .message-time { align-self: flex-end; }
+    .message.magni .message-time { align-self: flex-start; }
+
+    /* Typing Indicator */
+    .typing-indicator {
       display: flex;
       gap: 4px;
+      padding: 6px 0;
       align-items: center;
-      box-shadow: var(--shadow);
     }
-
-    .typing-dots span {
-      width: 6px; height: 6px;
+    .typing-indicator span {
+      width: 6px;
+      height: 6px;
+      background-color: var(--text-muted);
       border-radius: 50%;
-      background: var(--amber);
-      animation: bounce 1.2s ease-in-out infinite;
+      animation: bounce 1.4s infinite ease-in-out both;
     }
-
-    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-
+    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
     @keyframes bounce {
-      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-      30% { transform: translateY(-6px); opacity: 1; }
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1.0); }
     }
 
-    /* ── INPUT ── */
-    .input-area {
-      padding: 1.2rem 2rem 1.5rem;
-      background: var(--bg-card);
-      border-top: 1px solid var(--border);
-    }
-
-    .input-wrapper {
-      display: flex;
-      gap: 0.8rem;
-      align-items: flex-end;
-      background: var(--bg);
-      border: 1.5px solid var(--border-strong);
-      border-radius: 16px;
-      padding: 0.6rem 0.6rem 0.6rem 1rem;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .input-wrapper:focus-within {
-      border-color: var(--amber);
-      box-shadow: 0 0 0 3px var(--amber-dim);
-    }
-
-    #messageInput {
-      flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      font-family: var(--font-body);
-      font-size: 0.9rem;
-      color: var(--text);
-      resize: none;
-      max-height: 120px;
-      min-height: 24px;
-      line-height: 1.5;
-      padding: 0.3rem 0;
-    }
-
-    #messageInput::placeholder { color: var(--text-light); }
-
-    .send-btn {
-      width: 38px; height: 38px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, var(--amber), var(--amber-light));
-      border: none;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: opacity 0.2s, transform 0.2s;
-      box-shadow: 0 2px 8px var(--amber-glow);
-    }
-
-    .send-btn:hover { opacity: 0.9; transform: scale(1.05); }
-    .send-btn:active { transform: scale(0.97); }
-    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-
-    .send-btn svg { width: 16px; height: 16px; fill: white; }
-
-    .input-hint {
-      font-size: 0.68rem;
-      color: var(--text-light);
-      margin-top: 0.5rem;
-      padding-left: 0.2rem;
-    }
-
-    /* ── WELCOME MESSAGE ── */
-    .welcome {
-      text-align: center;
-      padding: 3rem 2rem;
-      max-width: 420px;
-      margin: auto;
-    }
-
-    .welcome-icon {
-      width: 120px; height: 120px;
-      background: none;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 1.5rem;
-      overflow: hidden;
-      box-shadow: 0 8px 32px rgba(212,129,10,0.4);
-      flex-shrink: 0;
-    }
-
-    .welcome h2 {
-      font-family: var(--font-display);
-      font-size: 1.6rem;
-      font-weight: 600;
-      color: var(--text);
-      letter-spacing: -0.02em;
-      margin-bottom: 0.6rem;
-    }
-
-    .welcome p {
-      font-size: 0.88rem;
-      color: var(--text-dim);
-      line-height: 1.6;
-    }
-
-    /* ── FEEDBACK MODAL ── */
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.4);
-      backdrop-filter: blur(4px);
+    /* Resolution Context Bar */
+    .resolution-bar {
       display: none;
       align-items: center;
-      justify-content: center;
-      z-index: 100;
+      gap: 1rem;
+      padding: 0.75rem 1.25rem;
+      background: rgba(26, 26, 58, 0.8);
+      border: 1px solid var(--glass-border);
+      border-radius: 0.75rem;
+      margin-top: 0.5rem;
+      animation: fadeIn 0.3s ease-out;
+      width: fit-content;
     }
-
-    .modal-overlay.visible { display: flex; }
-
-    .modal {
-      background: var(--bg-card);
-      border-radius: 20px;
-      padding: 2rem;
-      max-width: 380px;
-      width: 90%;
-      box-shadow: var(--shadow-lg);
-      animation: modalIn 0.3s ease forwards;
-    }
-
-    @keyframes modalIn {
-      from { opacity: 0; transform: scale(0.95) translateY(10px); }
-      to { opacity: 1; transform: scale(1) translateY(0); }
-    }
-
-    .modal h3 {
-      font-family: var(--font-display);
-      font-size: 1.2rem;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 0.4rem;
-    }
-
-    .modal p {
-      font-size: 0.82rem;
-      color: var(--text-dim);
-      margin-bottom: 1.5rem;
-    }
-
-    .stars {
-      display: flex;
-      gap: 0.5rem;
-      justify-content: center;
-      margin-bottom: 1.2rem;
-    }
-
-    .star {
-      font-size: 2rem;
-      cursor: pointer;
-      transition: transform 0.15s;
-      filter: grayscale(1);
-      opacity: 0.4;
-    }
-
-    .star:hover, .star.active {
-      filter: grayscale(0);
-      opacity: 1;
-      transform: scale(1.15);
-    }
-
-    .modal textarea {
-      width: 100%;
-      background: var(--bg);
-      border: 1.5px solid var(--border-strong);
-      border-radius: 10px;
-      padding: 0.8rem;
-      font-family: var(--font-body);
-      font-size: 0.85rem;
-      color: var(--text);
-      resize: none;
-      height: 80px;
-      outline: none;
-      margin-bottom: 1.2rem;
-      transition: border-color 0.2s;
-    }
-
-    .modal textarea:focus { border-color: var(--amber); }
-    .modal textarea::placeholder { color: var(--text-light); }
-
-    .modal-buttons {
-      display: flex;
-      gap: 0.8rem;
-    }
-
-    .btn-skip {
-      flex: 1;
-      padding: 0.7rem;
-      border-radius: 10px;
-      border: 1.5px solid var(--border-strong);
+    .resolution-bar.visible { display: flex; }
+    .resolution-text { font-size: 0.85rem; color: var(--text-muted); }
+    .resolution-btn {
       background: transparent;
-      color: var(--text-dim);
-      font-family: var(--font-body);
-      font-size: 0.85rem;
+      border: 1px solid rgba(255,255,255,0.15);
+      color: var(--text-main);
+      padding: 0.25rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
       cursor: pointer;
       transition: all 0.2s;
     }
+    .resolution-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.3); }
+    .resolution-btn.yes:hover { border-color: #38a169; color: #48bb78; }
+    .resolution-btn.no:hover { border-color: #e53e3e; color: #f56565; }
 
-    .btn-skip:hover { background: var(--bg); }
+    /* Input Footer Workspace */
+    .footer-area {
+      padding: 1.5rem 0;
+      background: linear-gradient(to top, var(--magni-midnight) 80%, transparent);
+    }
 
-    .btn-submit {
-      flex: 2;
-      padding: 0.7rem;
-      border-radius: 10px;
+    .input-wrapper {
+      position: relative;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 1.25rem;
+      padding: 0.5rem 0.75rem;
+      display: flex;
+      align-items: flex-end;
+      gap: 0.5rem;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .input-wrapper:focus-within {
+      border-color: var(--glass-focus);
+      box-shadow: 0 0 0 3px rgba(251, 220, 100, 0.08);
+    }
+
+    textarea {
+      flex: 1;
+      background: transparent;
       border: none;
-      background: linear-gradient(135deg, var(--amber), var(--amber-light));
-      color: white;
-      font-family: var(--font-body);
-      font-size: 0.85rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: opacity 0.2s;
-      box-shadow: 0 2px 8px var(--amber-glow);
+      outline: none;
+      color: var(--text-main);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem;
+      padding: 0.5rem;
+      resize: none;
+      max-height: 160px;
+      height: 38px;
+      line-height: 1.4;
     }
 
-    .btn-submit:hover { opacity: 0.9; }
+    textarea::placeholder { color: var(--text-muted); }
 
-
-    /* ── RESOLUTION BAR ── */
-    .resolution-bar {
-      display: none;
-      align-self: center;
-      background: var(--magni-bubble);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 0.7rem 1.2rem;
-      box-shadow: var(--shadow);
-      animation: slideIn 0.3s ease forwards;
-      text-align: center;
-      max-width: 360px;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 0.8rem;
-    }
-    .resolution-bar.visible { display: flex; align-items: center; }
-    .resolution-question { font-size: 0.82rem; color: var(--text-dim); white-space: nowrap; }
-    .resolution-btns { display: flex; gap: 0.5rem; }
-    .resolution-btn {
-      font-family: var(--font-body); font-size: 0.78rem; font-weight: 500;
-      padding: 0.4rem 1rem; border-radius: 20px; border: none; cursor: pointer; transition: all 0.2s;
-    }
-    .resolution-btn.yes { background: rgba(56,161,105,0.12); color: #38a169; border: 1px solid rgba(56,161,105,0.25); }
-    .resolution-btn.yes:hover { background: rgba(56,161,105,0.22); }
-    .resolution-btn.no { background: rgba(229,62,62,0.1); color: #e53e3e; border: 1px solid rgba(229,62,62,0.2); }
-    .resolution-btn.no:hover { background: rgba(229,62,62,0.18); }
-
-    .admin-link {
-      position: fixed;
-      bottom: 1rem;
-      right: 1rem;
-      font-family: var(--font-mono);
-      font-size: 0.62rem;
-      letter-spacing: 0.1em;
-      color: rgba(255,255,255,0.15);
-      text-decoration: none;
-      text-transform: uppercase;
-      transition: color 0.2s;
-      z-index: 50;
+    .send-button {
+      background: var(--magni-gold);
+      border: none;
+      outline: none;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
       display: flex;
       align-items: center;
-      gap: 0.3rem;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.2s, background-color 0.2s;
+      flex-shrink: 0;
+      margin-bottom: 2px;
     }
-    .admin-link:hover { color: var(--cyan); }
-    @media (max-width: 768px) {
-      .app { grid-template-columns: 1fr; }
-      .sidebar { display: none; }
-      .messages-container { padding: 1rem; }
-      .input-area { padding: 1rem; }
+
+    .send-button:hover { transform: scale(1.04); background-color: #ebd15b; }
+    .send-button:active { transform: scale(0.96); }
+    .send-button svg { width: 16px; height: 16px; fill: var(--magni-midnight); margin-left: 1px; }
+
+    /* Modal / Feedback Layout */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(4, 4, 14, 0.8);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 100;
+    }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    .modal-card {
+      background: #11112a;
+      border: 1px solid var(--glass-border);
+      padding: 2rem;
+      border-radius: 1.25rem;
+      max-width: 420px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      transform: scale(0.95);
+      transition: transform 0.3s ease;
+    }
+    .modal-overlay.active .modal-card { transform: scale(1); }
+    .modal-title { font-family: 'Fraunces', serif; font-size: 1.35rem; color: var(--text-main); }
+    .stars-row { display: flex; gap: 0.5rem; justify-content: center; margin: 0.5rem 0; }
+    .star { font-size: 1.75rem; color: #2d2d50; cursor: pointer; transition: color 0.15s; }
+    .star.active, .star:hover { color: var(--magni-gold); }
+    .feedback-textarea {
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 0.75rem;
+      color: var(--text-main);
+      font-size: 0.9rem;
+      height: 80px;
+    }
+    .feedback-submit {
+      background: var(--magni-gold);
+      color: var(--magni-midnight);
+      border: none; padding: 0.65rem;
+      border-radius: 8px; font-weight: 500;
+      cursor: pointer; transition: opacity 0.2s;
+    }
+    .feedback-submit:hover { opacity: 0.9; }
+    .modal-close {
+      text-align: center; font-size: 0.8rem; color: var(--text-muted); cursor: pointer;
     }
   </style>
 </head>
 <body>
 
-<div class="app">
-
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
+  <header>
     <div class="brand">
-      <div class="brand-icon">
-        <svg viewBox="0 0 680 680" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;border-radius:50%;display:block;"><defs><radialGradient id="bg10" cx="50%" cy="30%" r="85%"><stop offset="0%" stop-color="#ff9940"/><stop offset="25%" stop-color="#e05510"/><stop offset="50%" stop-color="#8a2a50"/><stop offset="75%" stop-color="#3a1060"/><stop offset="100%" stop-color="#0e0520"/></radialGradient><radialGradient id="sun10" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff"/><stop offset="20%" stop-color="#fff4a0"/><stop offset="50%" stop-color="#ffaa00" stop-opacity="0.7"/><stop offset="100%" stop-color="#ff6600" stop-opacity="0"/></radialGradient><radialGradient id="hor10" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff7730" stop-opacity="0.8"/><stop offset="100%" stop-color="#ff4400" stop-opacity="0"/></radialGradient><radialGradient id="pyL10" cx="15%" cy="0%" r="100%"><stop offset="0%" stop-color="#e8a030"/><stop offset="100%" stop-color="#7a4a00"/></radialGradient><radialGradient id="pyR10" cx="85%" cy="0%" r="100%"><stop offset="0%" stop-color="#6a3800"/><stop offset="100%" stop-color="#2a1200"/></radialGradient><radialGradient id="wat10" cx="50%" cy="35%" r="60%"><stop offset="0%" stop-color="#ff6620" stop-opacity="0.6"/><stop offset="100%" stop-color="#1a0a30"/></radialGradient><clipPath id="cl10"><circle cx="340" cy="340" r="315"/></clipPath></defs><circle cx="340" cy="340" r="320" fill="url(#bg10)"/><ellipse cx="340" cy="480" rx="320" ry="80" fill="url(#hor10)" opacity="0.7"/><circle cx="370" cy="210" r="130" fill="url(#sun10)" opacity="0.35"/><circle cx="370" cy="210" r="80" fill="url(#sun10)" opacity="0.5"/><circle cx="370" cy="210" r="42" fill="#fff8d0" opacity="0.95"/><circle cx="370" cy="210" r="28" fill="#fffbe0"/><circle cx="370" cy="210" r="18" fill="white"/><g stroke="#ffcc00" stroke-linecap="round" opacity="0.28"><line x1="370" y1="172" x2="370" y2="55" stroke-width="2"/><line x1="370" y1="172" x2="438" y2="95" stroke-width="1.5"/><line x1="370" y1="172" x2="302" y2="95" stroke-width="1.5"/><line x1="370" y1="172" x2="480" y2="138" stroke-width="1.2"/><line x1="370" y1="172" x2="260" y2="138" stroke-width="1.2"/></g><g fill="white"><circle cx="88" cy="72" r="1.6" opacity="0.7"/><circle cx="488" cy="78" r="1.8" opacity="0.85"/><circle cx="520" cy="90" r="2.2" opacity="0.92"/><circle cx="228" cy="62" r="1.4" opacity="0.65"/><circle cx="568" cy="182" r="1.6" opacity="0.75"/></g><g clip-path="url(#cl10)"><rect x="25" y="526" width="632" height="170" fill="#2a1408"/><ellipse cx="340" cy="528" rx="332" ry="16" fill="#3a1e0a"/><ellipse cx="340" cy="528" rx="280" ry="10" fill="#ff6620" opacity="0.18"/><ellipse cx="68" cy="518" rx="50" ry="13" fill="url(#wat10)" opacity="0.95"/><path d="M32 515 Q68 509 104 515" fill="none" stroke="#ff8840" stroke-width="1.1" opacity="0.5" stroke-linecap="round"/><ellipse cx="68" cy="523" rx="56" ry="9" fill="#2a1408" opacity="0.5"/><path d="M58 524 C57 498 56 472 57 448 C58 424 60 406 62 388" fill="none" stroke="#1a0a04" stroke-width="9" stroke-linecap="round"/><path d="M62 388 C40 368 14 362 -6 370" fill="none" stroke="#1a0e05" stroke-width="5.2" stroke-linecap="round"/><path d="M62 388 C58 362 56 344 58 330" fill="none" stroke="#1a0e05" stroke-width="4.4" stroke-linecap="round"/><path d="M62 388 C80 370 96 366 110 370" fill="none" stroke="#1a0e05" stroke-width="4.8" stroke-linecap="round"/><circle cx="66" cy="400" r="5" fill="#1a0a04"/><path d="M92 526 C91 506 90 486 91 466 C92 448 94 432 96 418" fill="none" stroke="#150804" stroke-width="8" stroke-linecap="round"/><path d="M96 418 C74 400 50 395 32 402" fill="none" stroke="#1a0e05" stroke-width="4.5" stroke-linecap="round"/><path d="M96 418 C92 394 90 376 92 362" fill="none" stroke="#1a0e05" stroke-width="3.8" stroke-linecap="round"/><path d="M96 418 C112 400 126 396 138 400" fill="none" stroke="#1a0e05" stroke-width="4.5" stroke-linecap="round"/><circle cx="100" cy="428" r="4.5" fill="#1a0a04"/><ellipse cx="118" cy="492" rx="28" ry="18" fill="#1a0e04"/><ellipse cx="114" cy="474" rx="14" ry="12" fill="#1a0e04"/><rect x="128" y="506" width="7" height="24" rx="3.5" fill="#150a04"/><rect x="140" y="506" width="7" height="24" rx="3.5" fill="#100804"/><rect x="100" y="506" width="7" height="24" rx="3.5" fill="#150a04"/><rect x="112" y="506" width="7" height="24" rx="3.5" fill="#100804"/><rect x="99" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="111" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="127" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="139" y="527" width="9" height="5" rx="2" fill="#0a0402"/><path d="M96 488 C90 496 86 507 82 519" fill="none" stroke="#1a0e04" stroke-width="11" stroke-linecap="round"/><path d="M96 488 C90 496 86 507 82 519" fill="none" stroke="#ff9940" stroke-width="3" stroke-linecap="round" opacity="0.35"/><ellipse cx="79" cy="522" rx="12" ry="9" fill="#1a0e04" transform="rotate(-25 79 522)"/><ellipse cx="70" cy="526" rx="8" ry="5.5" fill="#150a04" transform="rotate(-25 70 526)"/><circle cx="82" cy="517" r="3" fill="#050200"/><circle cx="83" cy="516" r="1.3" fill="#ff9940" opacity="0.6"/><polygon points="370,210 185,528 370,528" fill="url(#pyL10)"/><polygon points="370,210 555,528 370,528" fill="url(#pyR10)"/><line x1="370" y1="210" x2="185" y2="528" stroke="#ffcc44" stroke-width="2" opacity="0.6"/><line x1="370" y1="210" x2="555" y2="528" stroke="#8a4400" stroke-width="1.5" opacity="0.4"/><g stroke="#c87800" stroke-width="0.9" opacity="0.28"><line x1="328" y1="288" x2="370" y2="288"/><line x1="294" y1="338" x2="370" y2="338"/><line x1="260" y1="388" x2="370" y2="388"/><line x1="226" y1="438" x2="370" y2="438"/><line x1="194" y1="488" x2="370" y2="488"/></g><ellipse cx="385" cy="530" rx="190" ry="8" fill="#0e0604" opacity="0.6"/></g><circle cx="340" cy="340" r="317" fill="none" stroke="#d4820a" stroke-width="4" opacity="0.9"/></svg>
-      </div>
-      <div class="brand-name">Magni</div>
-      <div class="brand-tagline">AI Customer Support</div>
-      <div class="brand-tagline" style="margin-top:0.3rem;opacity:0.5;font-style:italic;">Here to help — always</div>
+      <div class="brand-logo" id="logo-target"></div>
+      <h1 class="brand-title">Magni</h1>
+      <span class="brand-tag">Support Engine</span>
     </div>
+  </header>
 
-    <div class="sidebar-label">Quick Topics</div>
-    <div class="quick-topics">
-      <button class="topic-btn" onclick="sendQuickMessage('I have a question about my bill')">
-        <span class="topic-icon">💳</span> Billing & Payments
-      </button>
-      <button class="topic-btn" onclick="sendQuickMessage('I need technical support')">
-        <span class="topic-icon">⚙️</span> Technical Support
-      </button>
-      <button class="topic-btn" onclick="sendQuickMessage('Tell me about your products')">
-        <span class="topic-icon">📦</span> Products & Features
-      </button>
-      <button class="topic-btn" onclick="sendQuickMessage('I want to check my order status')">
-        <span class="topic-icon">🚚</span> Orders & Shipping
-      </button>
-      <button class="topic-btn" onclick="sendQuickMessage('I have some feedback to share')">
-        <span class="topic-icon">💬</span> Share Feedback
-      </button>
-    </div>
-
-    <div class="sidebar-footer">
-      <button class="new-chat-btn" onclick="resetChat()">
-        ✦ New Conversation
-      </button>
-      <div class="status-indicator">
-        <div class="status-dot"></div>
-        Magni is online
-      </div>
-    </div>
-  </aside>
-
-  <!-- MAIN CHAT -->
-  <main class="chat-main">
-
-    <div class="messages-container" id="messagesContainer">
-      <div class="welcome" id="welcomeScreen">
-        <div class="welcome-icon">
-          <svg viewBox="0 0 680 680" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;border-radius:50%;display:block;"><defs><radialGradient id="bgW" cx="50%" cy="30%" r="85%"><stop offset="0%" stop-color="#ff9940"/><stop offset="25%" stop-color="#e05510"/><stop offset="50%" stop-color="#8a2a50"/><stop offset="75%" stop-color="#3a1060"/><stop offset="100%" stop-color="#0e0520"/></radialGradient><radialGradient id="sunW" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff"/><stop offset="20%" stop-color="#fff4a0"/><stop offset="50%" stop-color="#ffaa00" stop-opacity="0.7"/><stop offset="100%" stop-color="#ff6600" stop-opacity="0"/></radialGradient><radialGradient id="horW" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff7730" stop-opacity="0.8"/><stop offset="100%" stop-color="#ff4400" stop-opacity="0"/></radialGradient><radialGradient id="pyLW" cx="15%" cy="0%" r="100%"><stop offset="0%" stop-color="#e8a030"/><stop offset="100%" stop-color="#7a4a00"/></radialGradient><radialGradient id="pyRW" cx="85%" cy="0%" r="100%"><stop offset="0%" stop-color="#6a3800"/><stop offset="100%" stop-color="#2a1200"/></radialGradient><radialGradient id="watW" cx="50%" cy="35%" r="60%"><stop offset="0%" stop-color="#ff6620" stop-opacity="0.6"/><stop offset="100%" stop-color="#1a0a30"/></radialGradient><clipPath id="clW"><circle cx="340" cy="340" r="315"/></clipPath></defs><circle cx="340" cy="340" r="320" fill="url(#bgW)"/><ellipse cx="340" cy="480" rx="320" ry="80" fill="url(#horW)" opacity="0.7"/><circle cx="370" cy="210" r="130" fill="url(#sunW)" opacity="0.35"/><circle cx="370" cy="210" r="80" fill="url(#sunW)" opacity="0.5"/><circle cx="370" cy="210" r="42" fill="#fff8d0" opacity="0.95"/><circle cx="370" cy="210" r="28" fill="#fffbe0"/><circle cx="370" cy="210" r="18" fill="white"/><g stroke="#ffcc00" stroke-linecap="round" opacity="0.28"><line x1="370" y1="172" x2="370" y2="55" stroke-width="2"/><line x1="370" y1="172" x2="438" y2="95" stroke-width="1.5"/><line x1="370" y1="172" x2="302" y2="95" stroke-width="1.5"/><line x1="370" y1="172" x2="480" y2="138" stroke-width="1.2"/><line x1="370" y1="172" x2="260" y2="138" stroke-width="1.2"/></g><g fill="white"><circle cx="88" cy="72" r="1.6" opacity="0.7"/><circle cx="488" cy="78" r="1.8" opacity="0.85"/><circle cx="520" cy="90" r="2.2" opacity="0.92"/><circle cx="228" cy="62" r="1.4" opacity="0.65"/><circle cx="568" cy="182" r="1.6" opacity="0.75"/></g><g clip-path="url(#clW)"><rect x="25" y="526" width="632" height="170" fill="#2a1408"/><ellipse cx="340" cy="528" rx="332" ry="16" fill="#3a1e0a"/><ellipse cx="340" cy="528" rx="280" ry="10" fill="#ff6620" opacity="0.18"/><ellipse cx="68" cy="518" rx="50" ry="13" fill="url(#watW)" opacity="0.95"/><path d="M32 515 Q68 509 104 515" fill="none" stroke="#ff8840" stroke-width="1.1" opacity="0.5" stroke-linecap="round"/><ellipse cx="68" cy="523" rx="56" ry="9" fill="#2a1408" opacity="0.5"/><path d="M58 524 C57 498 56 472 57 448 C58 424 60 406 62 388" fill="none" stroke="#1a0a04" stroke-width="9" stroke-linecap="round"/><path d="M62 388 C40 368 14 362 -6 370" fill="none" stroke="#1a0e05" stroke-width="5.2" stroke-linecap="round"/><path d="M62 388 C58 362 56 344 58 330" fill="none" stroke="#1a0e05" stroke-width="4.4" stroke-linecap="round"/><path d="M62 388 C80 370 96 366 110 370" fill="none" stroke="#1a0e05" stroke-width="4.8" stroke-linecap="round"/><circle cx="66" cy="400" r="5" fill="#1a0a04"/><path d="M92 526 C91 506 90 486 91 466 C92 448 94 432 96 418" fill="none" stroke="#150804" stroke-width="8" stroke-linecap="round"/><path d="M96 418 C74 400 50 395 32 402" fill="none" stroke="#1a0e05" stroke-width="4.5" stroke-linecap="round"/><path d="M96 418 C92 394 90 376 92 362" fill="none" stroke="#1a0e05" stroke-width="3.8" stroke-linecap="round"/><path d="M96 418 C112 400 126 396 138 400" fill="none" stroke="#1a0e05" stroke-width="4.5" stroke-linecap="round"/><circle cx="100" cy="428" r="4.5" fill="#1a0a04"/><ellipse cx="118" cy="492" rx="28" ry="18" fill="#1a0e04"/><ellipse cx="114" cy="474" rx="14" ry="12" fill="#1a0e04"/><rect x="128" y="506" width="7" height="24" rx="3.5" fill="#150a04"/><rect x="140" y="506" width="7" height="24" rx="3.5" fill="#100804"/><rect x="100" y="506" width="7" height="24" rx="3.5" fill="#150a04"/><rect x="112" y="506" width="7" height="24" rx="3.5" fill="#100804"/><rect x="99" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="111" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="127" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="139" y="527" width="9" height="5" rx="2" fill="#0a0402"/><path d="M96 488 C90 496 86 507 82 519" fill="none" stroke="#1a0e04" stroke-width="11" stroke-linecap="round"/><path d="M96 488 C90 496 86 507 82 519" fill="none" stroke="#ff9940" stroke-width="3" stroke-linecap="round" opacity="0.35"/><ellipse cx="79" cy="522" rx="12" ry="9" fill="#1a0e04" transform="rotate(-25 79 522)"/><ellipse cx="70" cy="526" rx="8" ry="5.5" fill="#150a04" transform="rotate(-25 70 526)"/><circle cx="82" cy="517" r="3" fill="#050200"/><circle cx="83" cy="516" r="1.3" fill="#ff9940" opacity="0.6"/><polygon points="370,210 185,528 370,528" fill="url(#pyLW)"/><polygon points="370,210 555,528 370,528" fill="url(#pyRW)"/><line x1="370" y1="210" x2="185" y2="528" stroke="#ffcc44" stroke-width="2" opacity="0.6"/><line x1="370" y1="210" x2="555" y2="528" stroke="#8a4400" stroke-width="1.5" opacity="0.4"/><g stroke="#c87800" stroke-width="0.9" opacity="0.28"><line x1="328" y1="288" x2="370" y2="288"/><line x1="294" y1="338" x2="370" y2="338"/><line x1="260" y1="388" x2="370" y2="388"/><line x1="226" y1="438" x2="370" y2="438"/><line x1="194" y1="488" x2="370" y2="488"/></g><ellipse cx="385" cy="530" rx="190" ry="8" fill="#0e0604" opacity="0.6"/></g><circle cx="340" cy="340" r="317" fill="none" stroke="#d4820a" stroke-width="4" opacity="0.9"/></svg>
+  <main>
+    <div id="chat-container">
+      <!-- Default Greeting Bubble -->
+      <div class="message magni">
+        <div class="message-bubble">
+          <p>Hello! I am <strong>Magni</strong>, an AI customer operations assistant built to automate knowledge distribution and handle platform inquiries. How can I help you explore today?</p>
         </div>
-        <h2>Hi, I'm Magni.</h2>
-        <p>I'm here to help with billing questions, technical issues, order tracking, or anything else on your mind. What can I do for you today?</p>
+        <div class="message-time">System Active</div>
       </div>
     </div>
 
-    <div class="typing-indicator" id="typingIndicator">
-      <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;">
-        <svg viewBox="0 0 680 680" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;border-radius:50%;display:block;"><defs><radialGradient id="bg13" cx="50%" cy="30%" r="85%"><stop offset="0%" stop-color="#ff9940"/><stop offset="25%" stop-color="#e05510"/><stop offset="50%" stop-color="#8a2a50"/><stop offset="75%" stop-color="#3a1060"/><stop offset="100%" stop-color="#0e0520"/></radialGradient><radialGradient id="sun13" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff"/><stop offset="20%" stop-color="#fff4a0"/><stop offset="50%" stop-color="#ffaa00" stop-opacity="0.7"/><stop offset="100%" stop-color="#ff6600" stop-opacity="0"/></radialGradient><radialGradient id="hor13" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff7730" stop-opacity="0.8"/><stop offset="100%" stop-color="#ff4400" stop-opacity="0"/></radialGradient><radialGradient id="pyL13" cx="15%" cy="0%" r="100%"><stop offset="0%" stop-color="#e8a030"/><stop offset="100%" stop-color="#7a4a00"/></radialGradient><radialGradient id="pyR13" cx="85%" cy="0%" r="100%"><stop offset="0%" stop-color="#6a3800"/><stop offset="100%" stop-color="#2a1200"/></radialGradient><radialGradient id="wat13" cx="50%" cy="35%" r="60%"><stop offset="0%" stop-color="#ff6620" stop-opacity="0.6"/><stop offset="100%" stop-color="#1a0a30"/></radialGradient><clipPath id="cl13"><circle cx="340" cy="340" r="315"/></clipPath></defs><circle cx="340" cy="340" r="320" fill="url(#bg13)"/><ellipse cx="340" cy="480" rx="320" ry="80" fill="url(#hor13)" opacity="0.7"/><circle cx="370" cy="210" r="130" fill="url(#sun13)" opacity="0.35"/><circle cx="370" cy="210" r="80" fill="url(#sun13)" opacity="0.5"/><circle cx="370" cy="210" r="42" fill="#fff8d0" opacity="0.95"/><circle cx="370" cy="210" r="28" fill="#fffbe0"/><circle cx="370" cy="210" r="18" fill="white"/><g stroke="#ffcc00" stroke-linecap="round" opacity="0.28"><line x1="370" y1="172" x2="370" y2="55" stroke-width="2"/><line x1="370" y1="172" x2="438" y2="95" stroke-width="1.5"/><line x1="370" y1="172" x2="302" y2="95" stroke-width="1.5"/><line x1="370" y1="172" x2="480" y2="138" stroke-width="1.2"/><line x1="370" y1="172" x2="260" y2="138" stroke-width="1.2"/></g><g fill="white"><circle cx="88" cy="72" r="1.6" opacity="0.7"/><circle cx="488" cy="78" r="1.8" opacity="0.85"/><circle cx="520" cy="90" r="2.2" opacity="0.92"/><circle cx="228" cy="62" r="1.4" opacity="0.65"/><circle cx="568" cy="182" r="1.6" opacity="0.75"/></g><g clip-path="url(#cl13)"><rect x="25" y="526" width="632" height="170" fill="#2a1408"/><ellipse cx="340" cy="528" rx="332" ry="16" fill="#3a1e0a"/><ellipse cx="340" cy="528" rx="280" ry="10" fill="#ff6620" opacity="0.18"/><ellipse cx="68" cy="518" rx="50" ry="13" fill="url(#wat13)" opacity="0.95"/><path d="M32 515 Q68 509 104 515" fill="none" stroke="#ff8840" stroke-width="1.1" opacity="0.5" stroke-linecap="round"/><ellipse cx="68" cy="523" rx="56" ry="9" fill="#2a1408" opacity="0.5"/><path d="M58 524 C57 498 56 472 57 448 C58 424 60 406 62 388" fill="none" stroke="#1a0a04" stroke-width="9" stroke-linecap="round"/><path d="M62 388 C40 368 14 362 -6 370" fill="none" stroke="#1a0e05" stroke-width="5.2" stroke-linecap="round"/><path d="M62 388 C58 362 56 344 58 330" fill="none" stroke="#1a0e05" stroke-width="4.4" stroke-linecap="round"/><path d="M62 388 C80 370 96 366 110 370" fill="none" stroke="#1a0e05" stroke-width="4.8" stroke-linecap="round"/><circle cx="66" cy="400" r="5" fill="#1a0a04"/><path d="M92 526 C91 506 90 486 91 466 C92 448 94 432 96 418" fill="none" stroke="#150804" stroke-width="8" stroke-linecap="round"/><path d="M96 418 C74 400 50 395 32 402" fill="none" stroke="#1a0e05" stroke-width="4.5" stroke-linecap="round"/><path d="M96 418 C92 394 90 376 92 362" fill="none" stroke="#1a0e05" stroke-width="3.8" stroke-linecap="round"/><path d="M96 418 C112 400 126 396 138 400" fill="none" stroke="#1a0e05" stroke-width="4.5" stroke-linecap="round"/><circle cx="100" cy="428" r="4.5" fill="#1a0a04"/><ellipse cx="118" cy="492" rx="28" ry="18" fill="#1a0e04"/><ellipse cx="114" cy="474" rx="14" ry="12" fill="#1a0e04"/><rect x="128" y="506" width="7" height="24" rx="3.5" fill="#150a04"/><rect x="140" y="506" width="7" height="24" rx="3.5" fill="#100804"/><rect x="100" y="506" width="7" height="24" rx="3.5" fill="#150a04"/><rect x="112" y="506" width="7" height="24" rx="3.5" fill="#100804"/><rect x="99" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="111" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="127" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="139" y="527" width="9" height="5" rx="2" fill="#0a0402"/><path d="M96 488 C90 496 86 507 82 519" fill="none" stroke="#1a0e04" stroke-width="11" stroke-linecap="round"/><path d="M96 488 C90 496 86 507 82 519" fill="none" stroke="#ff9940" stroke-width="3" stroke-linecap="round" opacity="0.35"/><ellipse cx="79" cy="522" rx="12" ry="9" fill="#1a0e04" transform="rotate(-25 79 522)"/><ellipse cx="70" cy="526" rx="8" ry="5.5" fill="#150a04" transform="rotate(-25 70 526)"/><circle cx="82" cy="517" r="3" fill="#050200"/><circle cx="83" cy="516" r="1.3" fill="#ff9940" opacity="0.6"/><polygon points="370,210 185,528 370,528" fill="url(#pyL13)"/><polygon points="370,210 555,528 370,528" fill="url(#pyR13)"/><line x1="370" y1="210" x2="185" y2="528" stroke="#ffcc44" stroke-width="2" opacity="0.6"/><line x1="370" y1="210" x2="555" y2="528" stroke="#8a4400" stroke-width="1.5" opacity="0.4"/><g stroke="#c87800" stroke-width="0.9" opacity="0.28"><line x1="328" y1="288" x2="370" y2="288"/><line x1="294" y1="338" x2="370" y2="338"/><line x1="260" y1="388" x2="370" y2="388"/><line x1="226" y1="438" x2="370" y2="438"/><line x1="194" y1="488" x2="370" y2="488"/></g><ellipse cx="385" cy="530" rx="190" ry="8" fill="#0e0604" opacity="0.6"/></g><circle cx="340" cy="340" r="317" fill="none" stroke="#d4820a" stroke-width="4" opacity="0.9"/></svg>
-      </div>
-      <div class="typing-dots">
-        <span></span><span></span><span></span>
-      </div>
-    </div>
-
-
-    <!-- Resolution bar -->
+    <!-- Context / Resolution Feedback Trigger Row -->
     <div class="resolution-bar" id="resolutionBar">
-      <span class="resolution-question">Did we solve your issue today?</span>
-      <div class="resolution-btns">
-        <button class="resolution-btn yes" onclick="submitResolution(true)">✅ Yes</button>
-        <button class="resolution-btn no" onclick="submitResolution(false)">❌ No</button>
-      </div>
+      <span class="resolution-text">Did this answer your question?</span>
+      <button class="resolution-btn yes" onclick="submitResolution(true)">Yes</button>
+      <button class="resolution-btn no" onclick="submitResolution(false)">No</button>
     </div>
 
-    <div class="input-area">
+    <div class="footer-area">
       <div class="input-wrapper">
-        <textarea
-          id="messageInput"
-          placeholder="Type your message..."
-          rows="1"
+        <textarea 
+          id="messageInput" 
+          placeholder="Type a message..." 
+          oninput="autoResize(this)" 
           onkeydown="handleKeyDown(event)"
-          oninput="autoResize(this)"
         ></textarea>
-        <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Send message">
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <button class="send-button" onclick="sendMessage()" aria-label="Send Message">
+          <svg viewBox="0 0 24 24">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
           </svg>
         </button>
       </div>
-      <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
     </div>
   </main>
-</div>
 
-<!-- FEEDBACK MODAL -->
-<div class="modal-overlay" id="feedbackModal">
-  <div class="modal">
-    <h3>How did I do?</h3>
-    <p>Your feedback helps me get better at helping you.</p>
-    <div class="stars" id="stars">
-      <span class="star" data-rating="1">⭐</span>
-      <span class="star" data-rating="2">⭐</span>
-      <span class="star" data-rating="3">⭐</span>
-      <span class="star" data-rating="4">⭐</span>
-      <span class="star" data-rating="5">⭐</span>
-    </div>
-    <textarea id="feedbackComment" placeholder="Anything else you'd like to share? (optional)"></textarea>
-    <div class="modal-buttons">
-      <button class="btn-skip" onclick="closeFeedback()">Skip</button>
-      <button class="btn-submit" onclick="submitFeedback()">Send Feedback</button>
+  <!-- Feedback Modal Framework Overlay -->
+  <div class="modal-overlay" id="feedbackModal">
+    <div class="modal-card">
+      <h3 class="modal-title">Rate your session</h3>
+      <div class="stars-row">
+        <span class="star" data-rating="1">★</span>
+        <span class="star" data-rating="2">★</span>
+        <span class="star" data-rating="3">★</span>
+        <span class="star" data-rating="4">★</span>
+        <span class="star" data-rating="5">★</span>
+      </div>
+      <textarea class="feedback-textarea" id="feedbackComment" placeholder="Any additional notes on how Magni performed? (Optional)"></textarea>
+      <button class="feedback-submit" onclick="submitFeedbackForm()">Submit Evaluation</button>
+      <span class="modal-close" onclick="closeFeedback()">Skip and close</span>
     </div>
   </div>
-</div>
 
-<!-- Subtle admin link -->
-<a href="/admin/login" class="admin-link">🔒 Admin</a>
+  <script>
+    // Textarea auto-sizing implementation
+    function autoResize(element) {
+      element.style.height = 'auto';
+      element.style.height = (element.scrollHeight) + 'px';
+    }
 
-<script>
+    // Capture Enter triggers safely without Shift+Enter conflict
+    function handleKeyDown(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault(); 
+        sendMessage();
+      }
+    }
+
     function magniSVG() {
-    return `<svg viewBox="0 0 680 680" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;border-radius:50%;display:block;"><defs><radialGradient id="bg14" cx="50%" cy="30%" r="85%"><stop offset="0%" stop-color="#ff9940"/><stop offset="25%" stop-color="#e05510"/><stop offset="50%" stop-color="#8a2a50"/><stop offset="75%" stop-color="#3a1060"/><stop offset="100%" stop-color="#0e0520"/></radialGradient><radialGradient id="sun14" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff"/><stop offset="20%" stop-color="#fff4a0"/><stop offset="50%" stop-color="#ffaa00" stop-opacity="0.7"/><stop offset="100%" stop-color="#ff6600" stop-opacity="0"/></radialGradient><radialGradient id="hor14" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff7730" stop-opacity="0.8"/><stop offset="100%" stop-color="#ff4400" stop-opacity="0"/></radialGradient><radialGradient id="pyL14" cx="15%" cy="0%" r="100%"><stop offset="0%" stop-color="#e8a030"/><stop offset="100%" stop-color="#7a4a00"/></radialGradient><radialGradient id="pyR14" cx="85%" cy="0%" r="100%"><stop offset="0%" stop-color="#6a3800"/><stop offset="100%" stop-color="#2a1200"/></radialGradient><radialGradient id="wat14" cx="50%" cy="35%" r="60%"><stop offset="0%" stop-color="#ff6620" stop-opacity="0.6"/><stop offset="100%" stop-color="#1a0a30"/></radialGradient><clipPath id="cl14"><circle cx="340" cy="340" r="315"/></clipPath></defs><circle cx="340" cy="340" r="320" fill="url(#bg14)"/><ellipse cx="340" cy="480" rx="320" ry="80" fill="url(#hor14)" opacity="0.7"/><circle cx="370" cy="210" r="130" fill="url(#sun14)" opacity="0.35"/><circle cx="370" cy="210" r="80" fill="url(#sun14)" opacity="0.5"/><circle cx="370" cy="210" r="42" fill="#fff8d0" opacity="0.95"/><circle cx="370" cy="210" r="28" fill="#fffbe0"/><circle cx="370" cy="210" r="18" fill="white"/><g stroke="#ffcc00" stroke-linecap="round" opacity="0.28"><line x1="370" y1="172" x2="370" y2="55" stroke-width="2"/><line x1="370" y1="172" x2="438" y2="95" stroke-width="1.5"/><line x1="370" y1="172" x2="302" y2="95" stroke-width="1.5"/><line x1="370" y1="172" x2="480" y2="138" stroke-width="1.2"/><line x1="370" y1="172" x2="260" y2="138" stroke-width="1.2"/></g><g fill="white"><circle cx="88" cy="72" r="1.6" opacity="0.7"/><circle cx="488" cy="78" r="1.8" opacity="0.85"/><circle cx="520" cy="90" r="2.2" opacity="0.92"/><circle cx="228" cy="62" r="1.4" opacity="0.65"/><circle cx="568" cy="182" r="1.6" opacity="0.75"/></g><g clip-path="url(#cl14)"><rect x="25" y="526" width="632" height="170" fill="#2a1408"/><ellipse cx="340" cy="528" rx="332" ry="16" fill="#3a1e0a"/><ellipse cx="340" cy="528" rx="280" ry="10" fill="#ff6620" opacity="0.18"/><ellipse cx="68" cy="518" rx="50" ry="13" fill="url(#wat14)" opacity="0.95"/><path d="M32 515 Q68 509 104 515" fill="none" stroke="#ff8840" stroke-width="1.1" opacity="0.5" stroke-linecap="round"/><ellipse cx="68" cy="523" rx="56" ry="9" fill="#2a1408" opacity="0.5"/><path d="M58 524 C57 498 56 472 57 448 C58 424 60 406 62 388" fill="none" stroke="#1a0a04" stroke-width="9" stroke-linecap="round"/><path d="M62 388 C40 368 14 362 -6 370" fill="none" stroke="#1a0e05" stroke-width="5.2" stroke-linecap="round"/><path d="M62 388 C58 362 56 344 58 330" fill="none" stroke="#1a0e05" stroke-width="4.4" stroke-linecap="round"/><path d="M62 388 C80 370 96 366 110 370" fill="none" stroke="#1a0e05" stroke-width="4.8" stroke-linecap="round"/><circle cx="66" cy="400" r="5" fill="#1a0a04"/><path d="M92 526 C91 506 90 486 91 466 C92 448 94 432 96 418" fill="none" stroke="#150804" stroke-width="8" stroke-linecap="round"/><path d="M96 418 C74 400 50 395 32 402" fill="none" stroke="#1a0e05" stroke-width="4.5" stroke-linecap="round"/><path d="M96 418 C92 394 90 376 92 362" fill="none" stroke="#1a0e05" stroke-width="3.8" stroke-linecap="round"/><path d="M96 418 C112 400 126 396 138 400" fill="none" stroke="#1a0e05" stroke-width="4.5" stroke-linecap="round"/><circle cx="100" cy="428" r="4.5" fill="#1a0a04"/><ellipse cx="118" cy="492" rx="28" ry="18" fill="#1a0e04"/><ellipse cx="114" cy="474" rx="14" ry="12" fill="#1a0e04"/><rect x="128" y="506" width="7" height="24" rx="3.5" fill="#150a04"/><rect x="140" y="506" width="7" height="24" rx="3.5" fill="#100804"/><rect x="100" y="506" width="7" height="24" rx="3.5" fill="#150a04"/><rect x="112" y="506" width="7" height="24" rx="3.5" fill="#100804"/><rect x="99" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="111" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="127" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="139" y="527" width="9" height="5" rx="2" fill="#0a0402"/><path d="M96 488 C90 496 86 507 82 519" fill="none" stroke="#1a0e04" stroke-width="11" stroke-linecap="round"/><path d="M96 488 C90 496 86 507 82 519" fill="none" stroke="#ff9940" stroke-width="3" stroke-linecap="round" opacity="0.35"/><ellipse cx="79" cy="522" rx="12" ry="9" fill="#1a0e04" transform="rotate(-25 79 522)"/><ellipse cx="70" cy="526" rx="8" ry="5.5" fill="#150a04" transform="rotate(-25 70 526)"/><circle cx="82" cy="517" r="3" fill="#050200"/><circle cx="83" cy="516" r="1.3" fill="#ff9940" opacity="0.6"/><polygon points="370,210 185,528 370,528" fill="url(#pyL14)"/><polygon points="370,210 555,528 370,528" fill="url(#pyR14)"/><line x1="370" y1="210" x2="185" y2="528" stroke="#ffcc44" stroke-width="2" opacity="0.6"/><line x1="370" y1="210" x2="555" y2="528" stroke="#8a4400" stroke-width="1.5" opacity="0.4"/><g stroke="#c87800" stroke-width="0.9" opacity="0.28"><line x1="328" y1="288" x2="370" y2="288"/><line x1="294" y1="338" x2="370" y2="338"/><line x1="260" y1="388" x2="370" y2="388"/><line x1="226" y1="438" x2="370" y2="438"/><line x1="194" y1="488" x2="370" y2="488"/></g><ellipse cx="385" cy="530" rx="190" ry="8" fill="#0e0604" opacity="0.6"/></g><circle cx="340" cy="340" r="317" fill="none" stroke="#d4820a" stroke-width="4" opacity="0.9"/></svg>`;
-  }
-
-  let sessionId = crypto.randomUUID();
-  let messageCount = 0;
-  let selectedRating = 0;
-  let feedbackShown = false;
-
-  function getTime() {
-    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-
-  function autoResize(el) {
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-  }
-
-  function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }
-
-  function hideWelcome() {
-    const welcome = document.getElementById('welcomeScreen');
-    if (welcome) welcome.remove();
-  }
-
-  function addMessage(content, role, intent) {
-    hideWelcome();
-    const container = document.getElementById('messagesContainer');
-
-    const msgDiv = document.createElement('div');
-    msgDiv.className = `message ${role}`;
-
-    const avatar = document.createElement('div');
-    avatar.className = 'msg-avatar';
-    if (role === 'magni') {
-      avatar.style.cssText = 'width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-top:2px;';
-      avatar.innerHTML = magniSVG();
-    } else {
-      avatar.style.cssText = 'width:32px;height:32px;border-radius:50%;background:#1a1a2e;color:rgba(255,255,255,0.8);font-size:0.75rem;font-family:var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;';
-      avatar.textContent = 'ZM';
+      return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#fff4b8"/>
+            <stop offset="60%" stop-color="#fbdc64"/>
+            <stop offset="100%" stop-color="#b89314"/>
+          </linearGradient>
+        </defs>
+        <circle cx="50" cy="50" r="46" fill="none" stroke="url(#goldGrad)" stroke-width="2.5" opacity="0.4"/>
+        <path d="M32,28 L50,15 L68,28 L68,72 L50,85 L32,72 Z" fill="none" stroke="url(#goldGrad)" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M50,15 L50,85" stroke="url(#goldGrad)" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.6"/>
+        <polygon points="50,32 60,52 38,44" fill="url(#goldGrad)" opacity="0.9"/>
+        <polygon points="50,68 40,48 62,56" fill="url(#goldGrad)" opacity="0.9"/>
+      </svg>`;
     }
 
-    const bubble = document.createElement('div');
-    bubble.className = 'msg-bubble';
-    bubble.textContent = content;
+    document.getElementById('logo-target').innerHTML = magniSVG();
 
-    const time = document.createElement('div');
-    time.className = 'msg-time';
-    time.textContent = getTime();
+    // Track active persistent session tokens safely via client generation
+    const sessionId = "{{ session.get('session_id', '') }}";
 
-    const inner = document.createElement('div');
-    inner.appendChild(bubble);
-    inner.appendChild(time);
+    function formatTime() {
+      const now = new Date();
+      return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
 
-    msgDiv.appendChild(avatar);
-    msgDiv.appendChild(inner);
+    // Simplified markdown inline compiler helper
+    function compileMarkdown(text) {
+      let html = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
 
-    container.appendChild(msgDiv);
-    container.scrollTop = container.scrollHeight;
+      // Code blocks
+      html = html.replace(/```([\s\S]+?)
+```/g, '<pre><code>$1</code></pre>');
+      // Inline code
+      html = html.replace(/`([^`]+?)`/g, '<code>$1</code>');
+      // Boldings
+      html = html.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>');
+      // Lists matching lines
+      let lines = html.split('\n');
+      let inList = false;
+      for(let i=0; i<lines.length; i++){
+        if (lines[i].trim().startsWith('- ')) {
+          lines[i] = (inList ? '' : '<ul style="margin-left:1.25rem; margin-bottom:0.75rem;">') + `<li>${lines[i].trim().substring(2)}</li>`;
+          inList = true;
+        } else {
+          if (inList) {
+            lines[i-1] += '</ul>';
+            inList = false;
+          }
+        }
+      }
+      if(inList) lines[lines.length-1] += '</ul>';
+      
+      return lines.join('\n').replace(/\n/g, '<br>');
+    }
 
-    if (intent) {
-  const badge = document.getElementById('intentBadge');
-  if (badge) {
-    badge.textContent = intent.charAt(0).toUpperCase() + intent.slice(1);
-    badge.classList.add('visible');
-  }
-}
+    function addMessage(text, sender) {
+      const container = document.getElementById('chat-container');
+      const msgDiv = document.createElement('div');
+      msgDiv.classList.add('message', sender);
 
-  function showTyping() {
-    const indicator = document.getElementById('typingIndicator');
-    indicator.classList.add('visible');
-    const container = document.getElementById('messagesContainer');
-    container.scrollTop = container.scrollHeight;
-  }
+      const bubble = document.createElement('div');
+      bubble.classList.add('message-bubble');
+      bubble.innerHTML = sender === 'magni' ? compileMarkdown(text) : text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, '<br>');
 
-  function hideTyping() {
-    document.getElementById('typingIndicator').classList.remove('visible');
-  }
+      const timeDiv = document.createElement('div');
+      timeDiv.classList.add('message-time');
+      timeDiv.textContent = formatTime();
 
-  async function sendMessage() {
-    const input = document.getElementById('messageInput');
-    const message = input.value.trim();
-    if (!message) return;
+      msgDiv.appendChild(bubble);
+      msgDiv.appendChild(timeDiv);
+      container.appendChild(msgDiv);
 
-    const sendBtn = document.getElementById('sendBtn');
-    sendBtn.disabled = true;
-    input.value = '';
-    input.style.height = 'auto';
+      container.scrollTop = container.scrollHeight;
+      return msgDiv;
+    }
 
-    addMessage(message, 'user');
-    messageCount++;
-    showTyping();
+    function showTypingIndicator() {
+      const container = document.getElementById('chat-container');
+      const indDiv = document.createElement('div');
+      indDiv.classList.add('message', 'magni', 'indicator-wrapper');
+      indDiv.id = 'typingIndicator';
 
-    try {
-      const res = await fetch('/chat', {
+      const bubble = document.createElement('div');
+      bubble.classList.add('message-bubble');
+      bubble.innerHTML = `<div class="typing-indicator"><span></span><span></span><span></span></div>`;
+      
+      indDiv.appendChild(bubble);
+      container.appendChild(indDiv);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function removeTypingIndicator() {
+      const el = document.getElementById('typingIndicator');
+      if (el) el.remove();
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const msg = input.value.trim();
+      if (!msg) return;
+
+      // Add to display viewport local loop
+      addMessage(msg, 'user');
+      input.value = '';
+      input.style.height = '38px'; // Reset sizing baseline
+
+      showTypingIndicator();
+
+      try {
+        const response = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg, session_id: sessionId })
+        });
+
+        removeTypingIndicator();
+
+        if (!response.ok) {
+          addMessage("I experienced an unexpected connection issue processing that. Please try once more.", 'magni');
+          return;
+        }
+
+        const data = await response.get_json ? await response.get_json() : await response.json();
+        addMessage(data.response, 'magni');
+
+        // Prime feedback row loop shortly after completion
+        setTimeout(showResolutionBar, 2000);
+
+      } catch (err) {
+        removeTypingIndicator();
+        addMessage("Network timeout or gateway error encountered. Confirm infrastructure status.", 'magni');
+      }
+    }
+
+    let selectedRating = 0;
+
+    function showFeedback() {
+      document.getElementById('feedbackModal').classList.add('active');
+    }
+
+    function closeFeedback() {
+      document.getElementById('feedbackModal').classList.remove('active');
+    }
+
+    async function submitFeedbackForm() {
+      if (selectedRating === 0) {
+        alert("Please tap a star count to complete evaluation scale.");
+        return;
+      }
+      const comment = document.getElementById('feedbackComment').value.trim();
+
+      await fetch('/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, session_id: sessionId })
+        body: JSON.stringify({
+          session_id: sessionId,
+          rating: selectedRating,
+          comment
+        })
       });
 
-      const data = await res.json();
-      hideTyping();
-
-      if (data.response) {
-        addMessage(data.response, 'magni', data.intent);
-      } else {
-        addMessage("I'm having trouble responding right now. Please try again.", 'magni');
-      }
-
-      if (messageCount >= 4 && !feedbackShown) {
-        feedbackShown = true;
-        setTimeout(showResolutionBar, 1000);
-      }
-
-    } catch (err) {
-      hideTyping();
-      addMessage("Something went wrong. Please check your connection and try again.", 'magni');
+      closeFeedback();
+      addMessage("Thank you for your feedback! It genuinely helps me improve. 😊", 'magni');
     }
 
-    sendBtn.disabled = false;
-    input.focus();
-  }
+    let resolutionSubmitted = false;
 
-  function sendQuickMessage(message) {
-    const input = document.getElementById('messageInput');
-    input.value = message;
-    sendMessage();
-  }
-
-  async function resetChat() {
-    await fetch('/reset', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId })
-    });
-
-    sessionId = crypto.randomUUID();
-    messageCount = 0;
-    feedbackShown = false;
-
-    const container = document.getElementById('messagesContainer');
-    container.innerHTML = `
-      <div class="welcome" id="welcomeScreen">
-        <div class="welcome-icon">
-          <svg viewBox="0 0 680 680" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;border-radius:50%;display:block;"><defs><radialGradient id="bgW" cx="50%" cy="30%" r="85%"><stop offset="0%" stop-color="#ff9940"/><stop offset="25%" stop-color="#e05510"/><stop offset="50%" stop-color="#8a2a50"/><stop offset="75%" stop-color="#3a1060"/><stop offset="100%" stop-color="#0e0520"/></radialGradient><radialGradient id="sunW" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff"/><stop offset="20%" stop-color="#fff4a0"/><stop offset="50%" stop-color="#ffaa00" stop-opacity="0.7"/><stop offset="100%" stop-color="#ff6600" stop-opacity="0"/></radialGradient><radialGradient id="horW" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ff7730" stop-opacity="0.8"/><stop offset="100%" stop-color="#ff4400" stop-opacity="0"/></radialGradient><radialGradient id="pyLW" cx="15%" cy="0%" r="100%"><stop offset="0%" stop-color="#e8a030"/><stop offset="100%" stop-color="#7a4a00"/></radialGradient><radialGradient id="pyRW" cx="85%" cy="0%" r="100%"><stop offset="0%" stop-color="#6a3800"/><stop offset="100%" stop-color="#2a1200"/></radialGradient><radialGradient id="watW" cx="50%" cy="35%" r="60%"><stop offset="0%" stop-color="#ff6620" stop-opacity="0.6"/><stop offset="100%" stop-color="#1a0a30"/></radialGradient><clipPath id="clW"><circle cx="340" cy="340" r="315"/></clipPath></defs><circle cx="340" cy="340" r="320" fill="url(#bgW)"/><ellipse cx="340" cy="480" rx="320" ry="80" fill="url(#horW)" opacity="0.7"/><circle cx="370" cy="210" r="130" fill="url(#sunW)" opacity="0.35"/><circle cx="370" cy="210" r="80" fill="url(#sunW)" opacity="0.5"/><circle cx="370" cy="210" r="42" fill="#fff8d0" opacity="0.95"/><circle cx="370" cy="210" r="28" fill="#fffbe0"/><circle cx="370" cy="210" r="18" fill="white"/><g stroke="#ffcc00" stroke-linecap="round" opacity="0.28"><line x1="370" y1="172" x2="370" y2="55" stroke-width="2"/><line x1="370" y1="172" x2="438" y2="95" stroke-width="1.5"/><line x1="370" y1="172" x2="302" y2="95" stroke-width="1.5"/><line x1="370" y1="172" x2="480" y2="138" stroke-width="1.2"/><line x1="370" y1="172" x2="260" y2="138" stroke-width="1.2"/></g><g fill="white"><circle cx="88" cy="72" r="1.6" opacity="0.7"/><circle cx="488" cy="78" r="1.8" opacity="0.85"/><circle cx="520" cy="90" r="2.2" opacity="0.92"/><circle cx="228" cy="62" r="1.4" opacity="0.65"/><circle cx="568" cy="182" r="1.6" opacity="0.75"/></g><g clip-path="url(#clW)"><rect x="25" y="526" width="632" height="170" fill="#2a1408"/><ellipse cx="340" cy="528" rx="332" ry="16" fill="#3a1e0a"/><ellipse cx="340" cy="528" rx="280" ry="10" fill="#ff6620" opacity="0.18"/><ellipse cx="68" cy="518" rx="50" ry="13" fill="url(#watW)" opacity="0.95"/><path d="M32 515 Q68 509 104 515" fill="none" stroke="#ff8840" stroke-width="1.1" opacity="0.5" stroke-linecap="round"/><ellipse cx="68" cy="523" rx="56" ry="9" fill="#2a1408" opacity="0.5"/><path d="M58 524 C57 498 56 472 57 448 C58 424 60 406 62 388" fill="none" stroke="#1a0a04" stroke-width="9" stroke-linecap="round"/><path d="M62 388 C40 368 14 362 -6 370" fill="none" stroke="#1a0e05" stroke-width="5.2" stroke-linecap="round"/><path d="M62 388 C58 362 56 344 58 330" fill="none" stroke="#1a0e05" stroke-width="4.4" stroke-linecap="round"/><path d="M62 388 C80 370 96 366 110 370" fill="none" stroke="#1a0e05" stroke-width="4.8" stroke-linecap="round"/><circle cx="66" cy="400" r="5" fill="#1a0a04"/><path d="M92 526 C91 506 90 486 91 466 C92 448 94 432 96 418" fill="none" stroke="#150804" stroke-width="8" stroke-linecap="round"/><path d="M96 418 C74 400 50 395 32 402" fill="none" stroke="#1a0e05" stroke-width="4.5" stroke-linecap="round"/><path d="M96 418 C92 394 90 376 92 362" fill="none" stroke="#1a0e05" stroke-width="3.8" stroke-linecap="round"/><path d="M96 418 C112 400 126 396 138 400" fill="none" stroke="#1a0e05" stroke-width="4.5" stroke-linecap="round"/><circle cx="100" cy="428" r="4.5" fill="#1a0a04"/><ellipse cx="118" cy="492" rx="28" ry="18" fill="#1a0e04"/><ellipse cx="114" cy="474" rx="14" ry="12" fill="#1a0e04"/><rect x="128" y="506" width="7" height="24" rx="3.5" fill="#150a04"/><rect x="140" y="506" width="7" height="24" rx="3.5" fill="#100804"/><rect x="100" y="506" width="7" height="24" rx="3.5" fill="#150a04"/><rect x="112" y="506" width="7" height="24" rx="3.5" fill="#100804"/><rect x="99" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="111" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="127" y="527" width="9" height="5" rx="2" fill="#0a0402"/><rect x="139" y="527" width="9" height="5" rx="2" fill="#0a0402"/><path d="M96 488 C90 496 86 507 82 519" fill="none" stroke="#1a0e04" stroke-width="11" stroke-linecap="round"/><path d="M96 488 C90 496 86 507 82 519" fill="none" stroke="#ff9940" stroke-width="3" stroke-linecap="round" opacity="0.35"/><ellipse cx="79" cy="522" rx="12" ry="9" fill="#1a0e04" transform="rotate(-25 79 522)"/><ellipse cx="70" cy="526" rx="8" ry="5.5" fill="#150a04" transform="rotate(-25 70 526)"/><circle cx="82" cy="517" r="3" fill="#050200"/><circle cx="83" cy="516" r="1.3" fill="#ff9940" opacity="0.6"/><polygon points="370,210 185,528 370,528" fill="url(#pyLW)"/><polygon points="370,210 555,528 370,528" fill="url(#pyRW)"/><line x1="370" y1="210" x2="185" y2="528" stroke="#ffcc44" stroke-width="2" opacity="0.6"/><line x1="370" y1="210" x2="555" y2="528" stroke="#8a4400" stroke-width="1.5" opacity="0.4"/><g stroke="#c87800" stroke-width="0.9" opacity="0.28"><line x1="328" y1="288" x2="370" y2="288"/><line x1="294" y1="338" x2="370" y2="338"/><line x1="260" y1="388" x2="370" y2="388"/><line x1="226" y1="438" x2="370" y2="438"/><line x1="194" y1="488" x2="370" y2="488"/></g><ellipse cx="385" cy="530" rx="190" ry="8" fill="#0e0604" opacity="0.6"/></g><circle cx="340" cy="340" r="317" fill="none" stroke="#d4820a" stroke-width="4" opacity="0.9"/></svg>
-        </div>
-        <h2>Hi, I'm Magni.</h2>
-        <p>I'm here to help with billing questions, technical issues, order tracking, or anything else on your mind. What can I do for you today?</p>
-      </div>`;
-
-    document.getElementById('intentBadge').classList.remove('visible');
-    document.getElementById('resolutionBar').classList.remove('visible');
-    resolutionSubmitted = false;
-  }
-
-  function showFeedback() {
-    document.getElementById('feedbackModal').classList.add('visible');
-  }
-
-  function closeFeedback() {
-    document.getElementById('feedbackModal').classList.remove('visible');
-  }
-
-  async function submitFeedback() {
-    if (!selectedRating) {
-      alert('Please select a rating before submitting.');
-      return;
+    function showResolutionBar() {
+      if (resolutionSubmitted) return;
+      const bar = document.getElementById('resolutionBar');
+      bar.classList.add('visible');
     }
 
-    const comment = document.getElementById('feedbackComment').value;
+    async function submitResolution(resolved) {
+      resolutionSubmitted = true;
+      const bar = document.getElementById('resolutionBar');
+      bar.innerHTML = resolved
+        ? '<span style="font-size:0.82rem;color:#38a169;">✅ Great! Glad we could help.</span>'
+        : '<span style="font-size:0.82rem;color:#e53e3e;">❌ Sorry to hear that. We\'ll keep improving.</span>';
 
-    await fetch('/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_id: sessionId,
-        rating: selectedRating,
-        comment
-      })
-    });
+      await fetch('/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, resolved })
+      });
 
-    closeFeedback();
-    addMessage("Thank you for your feedback! It genuinely helps me improve. 😊", 'magni');
-  }
+      // Show feedback modal after short delay
+      setTimeout(showFeedback, 1500);
+    }
 
-
-  let resolutionSubmitted = false;
-
-  function showResolutionBar() {
-    if (resolutionSubmitted) return;
-    const bar = document.getElementById('resolutionBar');
-    bar.classList.add('visible');
-  }
-
-  async function submitResolution(resolved) {
-    resolutionSubmitted = true;
-    const bar = document.getElementById('resolutionBar');
-    bar.innerHTML = resolved
-      ? '<span style="font-size:0.82rem;color:#38a169;">✅ Great! Glad we could help.</span>'
-      : '<span style="font-size:0.82rem;color:#e53e3e;">❌ Sorry to hear that. We\'ll keep improving.</span>';
-
-    await fetch('/resolve', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, resolved })
-    });
-
-    // Show feedback modal after short delay
-    setTimeout(showFeedback, 1500);
-  }
-
-  // Star rating
-  document.querySelectorAll('.star').forEach(star => {
-    star.addEventListener('click', () => {
-      selectedRating = parseInt(star.dataset.rating);
-      document.querySelectorAll('.star').forEach((s, i) => {
-        s.classList.toggle('active', i < selectedRating);
+    // Star rating selection loops
+    document.querySelectorAll('.star').forEach(star => {
+      star.addEventListener('click', () => {
+        selectedRating = parseInt(star.dataset.rating);
+        document.querySelectorAll('.star').forEach((s, i) => {
+          if (i < selectedRating) {
+            s.classList.add('active');
+          } else {
+            s.classList.remove('active');
+          }
+        });
       });
     });
-  });
-</script>
-
+  </script>
 </body>
 </html>
