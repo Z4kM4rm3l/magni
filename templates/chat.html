@@ -872,11 +872,12 @@
     container.scrollTop = container.scrollHeight;
 
     if (intent) {
-      const badge = document.getElementById('intentBadge');
-      badge.textContent = intent.charAt(0).toUpperCase() + intent.slice(1);
-      badge.classList.add('visible');
-    }
+  const badge = document.getElementById('intentBadge');
+  if (badge) {
+    badge.textContent = intent.charAt(0).toUpperCase() + intent.slice(1);
+    badge.classList.add('visible');
   }
+}
 
   function showTyping() {
     const indicator = document.getElementById('typingIndicator');

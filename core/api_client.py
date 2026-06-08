@@ -7,7 +7,6 @@ from core.utils import logger
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 MAGNI_SYSTEM_PROMPT = """You are Magni, a warm, professional, and highly capable AI customer service agent.
 
@@ -28,6 +27,7 @@ Your boundaries:
 Always end responses with a clear next step or offer to help further."""
 
 def get_magni_response(message: str, history: list, intent: str) -> str:
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
     try:
         flow_context = get_flow_context(intent)
         kb_context = get_kb_context(message)
