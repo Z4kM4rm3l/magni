@@ -7,11 +7,11 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/magni")
 
 # 2. Initialize the engine ONLY ONCE with the resolved URL
-# sslmode=require is needed for Railway's internal Postgres hostname.
-# The external proxy URL also accepts it, so this is safe in both environments.
+# Railway's internal Postgres hostname (postgres.railway.internal) does not
+# support SSL — SSL is terminated at the external proxy only. Omit connect_args
+# so psycopg2 uses its default negotiation, which works on both paths.
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"sslmode": "require"},
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,

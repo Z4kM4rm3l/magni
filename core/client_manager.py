@@ -106,23 +106,16 @@ def create_client(
             monthly_used=0,
             created_at=datetime.now(timezone.utc),
         )
-        logger.info(f"[DEBUG] create_client: db.add() about to run — id will be {client.id[:8]}")
         db.add(client)
-        logger.info(f"[DEBUG] create_client: db.add() done, calling db.commit()")
         db.commit()
-        logger.info(f"[DEBUG] create_client: db.commit() returned — calling db.refresh()")
         db.refresh(client)
-        logger.info(f"[DEBUG] create_client: db.refresh() done — id={client.id[:8]} business_name={client.business_name}")
-        result = _client_to_dict(client)
-        logger.info(f"[DEBUG] create_client: returning dict, client_id={result.get('client_id', 'MISSING')}")
-        return result
+        logger.info(f"Client created: {business_name} ({tier}) id={client.id[:8]}")
+        return _client_to_dict(client)
     except Exception as e:
-        logger.error(f"[DEBUG] create_client: EXCEPTION caught — type={type(e).__name__} msg={e}", exc_info=True)
         db.rollback()
-        logger.error(f"[DEBUG] create_client: rollback done, re-raising")
+        logger.error(f"create_client error: {e}")
         raise
     finally:
-        logger.info(f"[DEBUG] create_client: finally block — calling db.close()")
         db.close()
 
 
