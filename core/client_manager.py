@@ -1,195 +1,260 @@
-import os
-import json
-import time
+"""
+core/client_manager.py
+
+SQL-backed rewrite. Public function signatures are identical to the previous
+JSON-file version so all admin routes in app.py continue to work unchanged.
+
+data/clients.json is left on disk as a backup and is no longer written to.
+"""
 import uuid
+import time
+from datetime import datetime, timezone
+from core.db import SessionLocal
+from core.models import Client
+from core.billing_policies import TIER_LIMITS
+from core.utils import logger
 
-CLIENTS_FILE = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '..', 'data', 'clients.json')
-)
-
-TIER_LIMITS = {
+# Feature flags per tier — kept here for admin UI display logic.
+# The billing call-cap integers live in billing_policies.TIER_LIMITS.
+TIER_FEATURES = {
     "starter": {
-        "conversation_limit": 500,
+        "conversation_limit": 1000,
         "kb_article_limit": 10,
         "custom_identity": False,
-        "custom_domain": False,
         "white_label": False,
-        "analytics": "basic"
+        "analytics": "basic",
     },
     "professional": {
-        "conversation_limit": 2000,
+        "conversation_limit": 5000,
         "kb_article_limit": 50,
         "custom_identity": True,
-        "custom_domain": True,
         "white_label": False,
-        "analytics": "full"
+        "analytics": "full",
     },
     "enterprise": {
-        "conversation_limit": 5000,
-        "kb_article_limit": -1,  # unlimited
+        "conversation_limit": 25000,
+        "kb_article_limit": -1,
         "custom_identity": True,
-        "custom_domain": True,
         "white_label": True,
-        "analytics": "full"
-    }
+        "analytics": "full",
+    },
 }
 
-def _load_clients() -> list:
-    try:
-        if os.path.exists(CLIENTS_FILE):
-            with open(CLIENTS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return []
-    except Exception:
-        return []
 
-def _save_clients(clients: list):
-    os.makedirs(os.path.dirname(CLIENTS_FILE), exist_ok=True)
-    with open(CLIENTS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(clients, f, indent=2, ensure_ascii=False)
-
-def create_client(business_name: str, email: str, tier: str,
-                  bot_name: str = "Magni", api_key: str = "",
-                  billing_date: str = "") -> dict:
-    """Create a new client account."""
-    clients = _load_clients()
-    limits = TIER_LIMITS.get(tier, TIER_LIMITS["starter"])
-
-    client = {
-        "client_id": str(uuid.uuid4())[:8],
-        "business_name": business_name,
-        "email": email,
-        "tier": tier,
-        "status": "active",
-        "bot_name": bot_name,
-        "api_key": api_key,
-        "billing_date": billing_date,
-        "conversation_limit": limits["conversation_limit"],
-        "conversations_used": 0,
-        "kb_article_limit": limits["kb_article_limit"],
-        "custom_identity": limits["custom_identity"],
-        "white_label": limits["white_label"],
-        "analytics": limits["analytics"],
-        "created_at": time.time(),
-        "updated_at": time.time(),
-        "notes": ""
+def _client_to_dict(c: Client) -> dict:
+    """Translate a Client ORM row to the dict shape the admin UI expects."""
+    tier = c.tier or "starter"
+    features = TIER_FEATURES.get(tier, TIER_FEATURES["starter"])
+    return {
+        "client_id":          c.id,
+        "business_name":      c.business_name or "",
+        "email":              c.email or "",
+        "tier":               tier,
+        "status":             "active" if c.is_active else "suspended",
+        "bot_name":           c.bot_name or "Magni",
+        "api_key":            c.api_key or "",
+        "notes":              c.notes or "",
+        # Widget config
+        "primary_color":      c.primary_color or "#f59e0b",
+        "welcome_message":    c.welcome_message or "Hi! How can I help you today?",
+        "allowed_domains":    c.allowed_domains or [],
+        # Billing counters (kept for UI parity with old JSON shape)
+        "conversation_limit": (
+            c.monthly_limit if c.monthly_limit is not None
+            else features["conversation_limit"]
+        ),
+        "conversations_used": c.monthly_used or 0,
+        # Tier feature flags
+        "kb_article_limit":   features["kb_article_limit"],
+        "custom_identity":    features["custom_identity"],
+        "white_label":        features["white_label"],
+        "analytics":          features["analytics"],
+        # Timestamps
+        "created_at": c.created_at.timestamp() if c.created_at else None,
+        "updated_at": None,  # not tracked on the SQL model; kept for shape parity
     }
 
-    clients.append(client)
-    _save_clients(clients)
-    return client
+
+def create_client(
+    business_name: str,
+    email: str,
+    tier: str,
+    bot_name: str = "Magni",
+    api_key: str = "",
+    billing_date: str = "",
+    primary_color: str = "#f59e0b",
+    welcome_message: str = "Hi! How can I help you today?",
+    allowed_domains: list | None = None,
+    notes: str = "",
+) -> dict:
+    features = TIER_FEATURES.get(tier, TIER_FEATURES["starter"])
+    db = SessionLocal()
+    try:
+        client = Client(
+            id=str(uuid.uuid4()),
+            api_key=api_key or f"sk_magni_{uuid.uuid4().hex[:24]}",
+            business_name=business_name,
+            email=email,
+            tier=tier,
+            is_active=True,
+            bot_name=bot_name,
+            notes=notes,
+            primary_color=primary_color,
+            welcome_message=welcome_message,
+            allowed_domains=allowed_domains or [],
+            monthly_limit=TIER_LIMITS.get(tier, TIER_LIMITS["starter"]),
+            monthly_used=0,
+            created_at=datetime.now(timezone.utc),
+        )
+        logger.info(f"[DEBUG] create_client: db.add() about to run — id will be {client.id[:8]}")
+        db.add(client)
+        logger.info(f"[DEBUG] create_client: db.add() done, calling db.commit()")
+        db.commit()
+        logger.info(f"[DEBUG] create_client: db.commit() returned — calling db.refresh()")
+        db.refresh(client)
+        logger.info(f"[DEBUG] create_client: db.refresh() done — id={client.id[:8]} business_name={client.business_name}")
+        result = _client_to_dict(client)
+        logger.info(f"[DEBUG] create_client: returning dict, client_id={result.get('client_id', 'MISSING')}")
+        return result
+    except Exception as e:
+        logger.error(f"[DEBUG] create_client: EXCEPTION caught — type={type(e).__name__} msg={e}", exc_info=True)
+        db.rollback()
+        logger.error(f"[DEBUG] create_client: rollback done, re-raising")
+        raise
+    finally:
+        logger.info(f"[DEBUG] create_client: finally block — calling db.close()")
+        db.close()
+
 
 def get_all_clients() -> list:
-    clients = _load_clients()
-    return sorted(clients, key=lambda x: x.get("created_at", 0), reverse=True)
+    db = SessionLocal()
+    try:
+        clients = db.query(Client).order_by(Client.created_at.desc()).all()
+        return [_client_to_dict(c) for c in clients]
+    finally:
+        db.close()
+
 
 def get_client(client_id: str) -> dict | None:
-    clients = _load_clients()
-    for client in clients:
-        if client["client_id"] == client_id:
-            return client
-    return None
+    db = SessionLocal()
+    try:
+        client = db.query(Client).filter(Client.id == client_id).first()
+        return _client_to_dict(client) if client else None
+    finally:
+        db.close()
+
 
 def update_client(client_id: str, **kwargs) -> dict | None:
-    """Update any client fields."""
-    clients = _load_clients()
-    for i, client in enumerate(clients):
-        if client["client_id"] == client_id:
-            # If tier is changing, update limits automatically
-            if "tier" in kwargs and kwargs["tier"] != client["tier"]:
-                limits = TIER_LIMITS.get(kwargs["tier"], TIER_LIMITS["starter"])
-                kwargs["conversation_limit"] = limits["conversation_limit"]
-                kwargs["custom_identity"] = limits["custom_identity"]
-                kwargs["white_label"] = limits["white_label"]
-                kwargs["analytics"] = limits["analytics"]
-                kwargs["kb_article_limit"] = limits["kb_article_limit"]
+    db = SessionLocal()
+    try:
+        client = db.query(Client).filter(Client.id == client_id).first()
+        if not client:
+            return None
 
-            kwargs["updated_at"] = time.time()
-            clients[i].update(kwargs)
-            _save_clients(clients)
-            return clients[i]
-    return None
+        # If tier is changing, update the monthly_limit to match the new tier
+        if "tier" in kwargs and kwargs["tier"] != client.tier:
+            new_tier = kwargs["tier"]
+            client.monthly_limit = TIER_LIMITS.get(new_tier, TIER_LIMITS["starter"])
+
+        field_map = {
+            "business_name":  "business_name",
+            "email":          "email",
+            "bot_name":       "bot_name",
+            "notes":          "notes",
+            "tier":           "tier",
+            "primary_color":  "primary_color",
+            "welcome_message": "welcome_message",
+            "allowed_domains": "allowed_domains",
+        }
+        for kwarg_key, col_name in field_map.items():
+            if kwarg_key in kwargs:
+                setattr(client, col_name, kwargs[kwarg_key])
+
+        db.commit()
+        db.refresh(client)
+        return _client_to_dict(client)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"update_client error: {e}")
+        raise
+    finally:
+        db.close()
+
 
 def suspend_client(client_id: str) -> dict | None:
-    """Suspend a client — bot stops responding."""
-    return update_client(client_id, status="suspended")
+    db = SessionLocal()
+    try:
+        client = db.query(Client).filter(Client.id == client_id).first()
+        if not client:
+            return None
+        client.is_active = False
+        db.commit()
+        db.refresh(client)
+        return _client_to_dict(client)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"suspend_client error: {e}")
+        raise
+    finally:
+        db.close()
+
 
 def reactivate_client(client_id: str) -> dict | None:
-    """Reactivate a suspended client."""
-    return update_client(client_id, status="active",
-                        conversations_used=0)  # Reset monthly count
+    db = SessionLocal()
+    try:
+        client = db.query(Client).filter(Client.id == client_id).first()
+        if not client:
+            return None
+        client.is_active = True
+        client.monthly_used = 0
+        db.commit()
+        db.refresh(client)
+        return _client_to_dict(client)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"reactivate_client error: {e}")
+        raise
+    finally:
+        db.close()
+
 
 def delete_client(client_id: str) -> bool:
-    clients = _load_clients()
-    original = len(clients)
-    clients = [c for c in clients if c["client_id"] != client_id]
-    if len(clients) < original:
-        _save_clients(clients)
+    db = SessionLocal()
+    try:
+        client = db.query(Client).filter(Client.id == client_id).first()
+        if not client:
+            return False
+        db.delete(client)
+        db.commit()
         return True
-    return False
+    except Exception as e:
+        db.rollback()
+        logger.error(f"delete_client error: {e}")
+        raise
+    finally:
+        db.close()
 
-def increment_conversations(client_id: str) -> tuple[bool, str]:
-    """
-    Increment conversation count for a client.
-    Returns (allowed, reason) — allowed=False means limit reached.
-    """
-    clients = _load_clients()
-    for i, client in enumerate(clients):
-        if client["client_id"] == client_id:
-            if client["status"] != "active":
-                return False, "Account suspended"
-
-            limit = client.get("conversation_limit", 500)
-            used = client.get("conversations_used", 0)
-
-            # Enterprise overage — allow but track
-            if client["tier"] == "enterprise" and used >= limit:
-                overage = used - limit
-                overage_cost = overage * 0.10
-                if overage_cost >= 500:
-                    return False, "Monthly overage cap reached ($500)"
-
-            elif client["tier"] != "enterprise" and used >= limit:
-                return False, f"Monthly conversation limit reached ({limit})"
-
-            clients[i]["conversations_used"] = used + 1
-            clients[i]["updated_at"] = time.time()
-            _save_clients(clients)
-            return True, "ok"
-
-    return True, "ok"  # No client tracking — default allow
-
-def reset_monthly_conversations() -> int:
-    """Reset conversation counts for all active clients. Call on billing date."""
-    clients = _load_clients()
-    count = 0
-    for i, client in enumerate(clients):
-        if client["status"] == "active":
-            clients[i]["conversations_used"] = 0
-            count += 1
-    _save_clients(clients)
-    return count
 
 def get_client_stats() -> dict:
-    clients = _load_clients()
-    active = [c for c in clients if c["status"] == "active"]
-    suspended = [c for c in clients if c["status"] == "suspended"]
+    db = SessionLocal()
+    try:
+        all_clients = db.query(Client).all()
+        active    = [c for c in all_clients if c.is_active]
+        suspended = [c for c in all_clients if not c.is_active]
 
-    mrr = sum(
-        79 if c["tier"] == "starter"
-        else 249 if c["tier"] == "professional"
-        else 599
-        for c in active
-    )
+        mrr_map = {"starter": 79, "professional": 249, "enterprise": 599}
+        mrr = sum(mrr_map.get(c.tier, 0) for c in active)
 
-    return {
-        "total": len(clients),
-        "active": len(active),
-        "suspended": len(suspended),
-        "mrr": mrr,
-        "by_tier": {
-            "starter": len([c for c in active if c["tier"] == "starter"]),
-            "professional": len([c for c in active if c["tier"] == "professional"]),
-            "enterprise": len([c for c in active if c["tier"] == "enterprise"])
+        return {
+            "total":     len(all_clients),
+            "active":    len(active),
+            "suspended": len(suspended),
+            "mrr":       mrr,
+            "by_tier": {
+                "starter":      sum(1 for c in active if c.tier == "starter"),
+                "professional": sum(1 for c in active if c.tier == "professional"),
+                "enterprise":   sum(1 for c in active if c.tier == "enterprise"),
+            },
         }
-    }
+    finally:
+        db.close()

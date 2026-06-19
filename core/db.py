@@ -7,11 +7,14 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/magni")
 
 # 2. Initialize the engine ONLY ONCE with the resolved URL
+# sslmode=require is needed for Railway's internal Postgres hostname.
+# The external proxy URL also accepts it, so this is safe in both environments.
 engine = create_engine(
-    DATABASE_URL, 
-    pool_pre_ping=True,  # Disconnect recovery safeguard
-    pool_size=10,        # Number of persistent connections
-    max_overflow=20      # Temporary burst connection allowance
+    DATABASE_URL,
+    connect_args={"sslmode": "require"},
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
 )
 
 # 3. Thread-safe session manufacturing

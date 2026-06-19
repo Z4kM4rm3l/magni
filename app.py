@@ -1,16 +1,16 @@
-import os
+﻿import os
 import uuid
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from dotenv import load_dotenv
  
-# 🚨 CRITICAL: Load env vars BEFORE importing core modules
+# ðŸš¨ CRITICAL: Load env vars BEFORE importing core modules
 load_dotenv()
  
 # Stripe billing blueprint
 from routes.billing import billing_bp
+from routes.widget import widget_bp
  
-from core.api_client import get_magni_response
-from core.intent_classifier import classify_intent
+from agents.orchestrator import orchestrator
 from core.conversation_manager import conversation_manager
 from core.conversation_store import (
     start_conversation, add_message_to_conversation,
@@ -33,8 +33,6 @@ from core.utils import sanitize_input, logger
 # SQL-backed multi-tenant billing
 from core.db import SessionLocal, init_db
 from core.models import Client
-from core.client_guard import track_and_validate_request, increment_client_usage
-from core.billing_policies import TIER_LIMITS
  
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "")
@@ -49,12 +47,13 @@ apply_security_headers(app)
  
 # Register Stripe billing blueprint
 app.register_blueprint(billing_bp, url_prefix='/api/v1')
+app.register_blueprint(widget_bp)
  
 # Initialize database tables on startup
 with app.app_context():
     init_db()
  
-# ── DEMO ACCOUNT CONSTANTS ───────────────────────────────────
+# â”€â”€ DEMO ACCOUNT CONSTANTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 DEMO_CLIENT_ID   = "demo"
 DEMO_API_KEY     = os.getenv("MAGNI_DEMO_API_KEY", "sk_magni_demo_public_2026")
 DEMO_DAILY_LIMIT = 50
@@ -63,7 +62,7 @@ def _check_demo_limit():
     """
     Atomically checks and increments the demo account usage counter.
     Returns (allowed: bool, reason: str).
-    Fails OPEN only if DB is unreachable — demo is non-critical path.
+    Fails OPEN only if DB is unreachable â€” demo is non-critical path.
     """
     try:
         db = SessionLocal()
@@ -83,9 +82,9 @@ def _check_demo_limit():
         return True, "ok"
     except Exception as e:
         logger.error(f"Demo limit check failed: {e}")
-        return True, "ok"  # Fail open — demo is non-critical
+        return True, "ok"  # Fail open â€” demo is non-critical
  
-# ── CHAT ROUTES ──────────────────────────────────────────────
+# â”€â”€ CHAT ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
 @app.route("/")
 def index():
@@ -103,9 +102,9 @@ def chat():
     if not message:
         return jsonify({"error": "Empty message"}), 400
  
-    # ── DEMO GUARD ───────────────────────────────────────────
+    # â”€â”€ DEMO GUARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # Public visitors use the demo account (50 convos/day total).
-    # Paying clients send X-Magni-API-Key header — skip the demo guard.
+    # Paying clients send X-Magni-API-Key header â€” skip the demo guard.
     api_key = request.headers.get("X-Magni-API-Key", "").strip()
     is_paying_client = bool(api_key and api_key != DEMO_API_KEY)
  
@@ -115,7 +114,7 @@ def chat():
             if reason == "demo_limit":
                 return jsonify({
                     "response": (
-                        "The live demo has reached its daily limit of 50 conversations — "
+                        "The live demo has reached its daily limit of 50 conversations â€” "
                         "this keeps API costs controlled while the demo stays free and open. "
                         "The counter resets at midnight UTC. "
                         "Want a full walkthrough? Reach out at zmarm11@yahoo.com "
@@ -130,31 +129,36 @@ def chat():
                     "intent": "general",
                     "session_id": data.get("session_id", "demo")
                 }), 200
-    # ── END DEMO GUARD ───────────────────────────────────────
+    # â”€â”€ END DEMO GUARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
     session_id = data.get("session_id") or session.get("session_id", str(uuid.uuid4()))
-    intent = classify_intent(message)
     history = conversation_manager.get_history(session_id)
- 
-    logger.info(f"Session: {session_id[:8]} | Intent: {intent} | Message: {message[:50]}")
- 
-    # Ensure conversation record exists
+
+    result = orchestrator.run(
+        message=message,
+        session_id=session_id,
+        history=history,
+        api_key=api_key if is_paying_client else None,
+    )
+
+    intent = result.get("intent", "general")
+    response = result["response"]
+
+    logger.info(
+        f"Session: {session_id[:8]} | Intent: {intent} | "
+        f"Route: {result.get('route')} | Message: {message[:50]}"
+    )
+
     start_conversation(session_id)
- 
-    response = get_magni_response(message, history, intent)
- 
-    # Store in memory for context
     conversation_manager.add_message(session_id, "user", message)
     conversation_manager.add_message(session_id, "assistant", response)
- 
-    # Persist to conversation store
     add_message_to_conversation(session_id, "user", message, intent)
     add_message_to_conversation(session_id, "assistant", response, intent)
- 
+
     return jsonify({
         "response": response,
         "intent": intent,
-        "session_id": session_id
+        "session_id": session_id,
     })
  
 @app.route("/resolve", methods=["POST"])
@@ -204,7 +208,7 @@ def reset():
 def health():
     return jsonify({"status": "ok"})
  
-# ── AUTH ROUTES ──────────────────────────────────────────────
+# â”€â”€ AUTH ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
@@ -222,7 +226,7 @@ def admin_logout():
     logout()
     return redirect(url_for("admin_login"))
  
-# ── ADMIN HUB ────────────────────────────────────────────────
+# â”€â”€ ADMIN HUB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
 @app.route("/admin")
 @login_required
@@ -244,7 +248,7 @@ def admin_clients():
 def admin_analytics():
     return render_template("analytics.html")
  
-# ── KNOWLEDGE BASE ROUTES ─────────────────────────────────────
+# â”€â”€ KNOWLEDGE BASE ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
 @app.route("/api/kb", methods=["GET"])
 @api_login_required
@@ -304,7 +308,7 @@ def kb_delete(article_id):
         return jsonify({"error": "Article not found"}), 404
     return jsonify({"status": "deleted"})
  
-# ── CLIENT MANAGEMENT ROUTES ──────────────────────────────────
+# â”€â”€ CLIENT MANAGEMENT ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
 @app.route("/api/clients", methods=["GET"])
 @api_login_required
@@ -378,7 +382,7 @@ def clients_delete(client_id):
         return jsonify({"error": "Client not found"}), 404
     return jsonify({"status": "deleted"})
  
-# ── ANALYTICS ROUTES ──────────────────────────────────────────
+# â”€â”€ ANALYTICS ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
 @app.route("/api/insights", methods=["POST"])
 @api_login_required
@@ -430,3 +434,6 @@ def analytics_conversations():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
+
+
+
