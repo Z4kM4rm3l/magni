@@ -1,6 +1,7 @@
 import os
 from core.db import SessionLocal
 from core.client_guard import track_and_validate_request
+from core.emailer import send_escalation_alert
 from core.utils import logger
 import agents.triage_agent as _triage_mod
 import agents.resolver_agent as _resolver_mod
@@ -14,6 +15,20 @@ def _summarize_history(history: list) -> str:
     return "\n".join(
         f"{m['role'].upper()}: {m['content'][:100]}" for m in recent
     )
+
+
+def _maybe_alert(esc_result: dict, client_email: str, client_name: str,
+                 history: list, session_id: str) -> None:
+    """Fire escalation email if alert_client is set. Best-effort — never raises."""
+    if esc_result.get("alert_client") and client_email:
+        send_escalation_alert(
+            to_email=client_email,
+            business_name=client_name,
+            escalation_action=esc_result.get("action", ""),
+            escalation_reason=esc_result.get("reason", ""),
+            history=history,
+            session_id=session_id,
+        )
 
 
 class Orchestrator:
@@ -31,6 +46,9 @@ class Orchestrator:
         route level by _check_demo_limit(). Pass api_key for paying clients;
         the orchestrator will run track_and_validate_request() and commit.
         """
+        # Client identity for escalation emails — populated from billing gate.
+        client_email = ""
+        client_name = ""
 
         # ── PAYING CLIENT BILLING GATE ───────────────────────────────────────
         if api_key:
@@ -45,8 +63,11 @@ class Orchestrator:
                         "session_id": session_id,
                         "route": "blocked",
                     }
-                # client_guard.py defers commit to caller — close the loop here
+                # client_guard.py defers commit to caller — close the loop here.
                 db.commit()
+                # Extract identity strings before closing the session.
+                client_email = client.email or ""
+                client_name = client.business_name or ""
             except Exception as e:
                 logger.error(f"Orchestrator billing gate error: {e}")
                 db.rollback()
@@ -86,6 +107,7 @@ class Orchestrator:
                 "history_summary": history_summary,
                 "escalation_reason": escalation_reason or "Triage directed escalation.",
             })
+            _maybe_alert(esc_result, client_email, client_name, history, session_id)
             return {
                 "response": esc_result["message_to_user"],
                 "intent": intent,
@@ -111,8 +133,7 @@ class Orchestrator:
                 "history_summary": history_summary,
                 "escalation_reason": "Resolver determined it could not resolve this without human help.",
             })
-            # Return the resolver's response text (already sent to user) but
-            # annotate the payload so app.py can log the escalation event.
+            _maybe_alert(esc_result, client_email, client_name, history, session_id)
             return {
                 "response": res_result["response_text"],
                 "intent": intent,
