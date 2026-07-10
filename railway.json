@@ -4,8 +4,8 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "python scripts/reset_monthly_usage.py",
+    "startCommand": "python app.py",
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 1
+    "restartPolicyMaxRetries": 10
   }
 }
