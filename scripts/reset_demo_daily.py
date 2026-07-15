@@ -40,9 +40,9 @@ def reset_demo_usage():
 
         logger.info(
             f"Demo client daily reset complete. "
-            f"Usage cleared: {prev} → 0 at {datetime.now(timezone.utc).isoformat()}"
+            f"Usage cleared: {prev} -> 0 at {datetime.now(timezone.utc).isoformat()}"
         )
-        print(f"✅ Demo usage reset: {prev} conversations cleared.")
+        print(f"Demo usage reset: {prev} conversations cleared.")
 
     except Exception as e:
         db.rollback()
