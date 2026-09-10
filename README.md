@@ -4,13 +4,13 @@
 
 Magni is a multi-tenant AI customer support platform designed to automate customer conversations while maintaining control over **routing, knowledge grounding, human escalation, tenant isolation, and AI costs**.
 
-Rather than relying on a single general-purpose chatbot, Magni uses a coordinated team of specialized AI agents. Conversations are triaged, routed, resolved, or escalated through an explicit orchestration layer, giving each agent a focused responsibility and making the overall system easier to reason about and debug.
+Rather than relying on a single general-purpose chatbot, Magni uses a coordinated team of specialized AI agents. Conversations are triaged, routed, resolved, or escalated through an explicit orchestration layer, making the system easier to reason about, test, and debug.
 
 Magni is the flagship product of **Lemram Industries**.
 
 **Role:** Solo Architect & AI Software Engineer
 **Status:** Deployed and pilot-ready
-**Primary Stack:** Python, Flask, PostgreSQL, SQLAlchemy, Google Gemini 2.5, Stripe, Railway
+**Stack:** Python, Flask, PostgreSQL, SQLAlchemy, Google Gemini 2.5, Stripe, Railway
 
 ---
 
@@ -20,7 +20,7 @@ Magni provides businesses with an AI-powered customer support layer that can:
 
 * Answer customer questions using tenant-specific knowledge
 * Route conversations according to intent
-* Escalate conversations that require human intervention
+* Escalate conversations requiring human intervention
 * Maintain conversation state across interactions
 * Provide an embeddable customer-facing support widget
 * Track AI usage and enforce account limits
@@ -91,7 +91,7 @@ Owns conversation state and coordinates the overall workflow, determining which 
 
 **Triage Agent**
 
-Classifies the customer's intent and determines the appropriate workflow.
+Classifies customer intent and determines the appropriate workflow.
 
 **Resolver Agent**
 
@@ -120,15 +120,13 @@ Magni separates responsibilities so that:
 
 The orchestrator provides the control layer while specialized agents handle individual pieces of the workflow.
 
-This also creates a clearer path for future expansion. Additional specialized agents can be introduced without redesigning the customer-facing interface.
-
 ---
 
 ## Tenant Isolation
 
-Magni is designed as a multi-tenant SaaS application, meaning customer data must remain isolated even though tenants share the same application infrastructure.
+Magni is designed as a multi-tenant SaaS application, meaning customer data must remain isolated even though tenants share application infrastructure.
 
-Tenant-aware data access applies across areas such as:
+Tenant-aware data access applies across:
 
 * Conversations
 * Knowledge-base content
@@ -137,7 +135,7 @@ Tenant-aware data access applies across areas such as:
 * Billing information
 * Account configuration
 
-The AI workflow is also tenant-aware. Retrieved knowledge is associated with the relevant tenant before being supplied to the resolver workflow.
+Retrieved knowledge is also associated with the relevant tenant before being supplied to the resolver workflow.
 
 ---
 
@@ -145,7 +143,7 @@ The AI workflow is also tenant-aware. Retrieved knowledge is associated with the
 
 Magni currently uses a lightweight, application-level retrieval approach rather than a vector database.
 
-Knowledge-base articles are stored as structured data and searched using keyword matching across article titles and content. The highest-scoring results are then assembled into context for the Resolver Agent.
+Knowledge-base articles are stored as structured data and searched using keyword matching across article titles and content. Relevant results are assembled into context for the Resolver Agent.
 
 ```text
 Customer Question
@@ -163,9 +161,7 @@ Resolver Agent
 Grounded Response
 ```
 
-This approach was intentionally kept simple for the current scale of the application.
-
-It provides a clear retrieval path without introducing the operational complexity of a dedicated vector database.
+This approach was intentionally kept simple for the current scale of the application. It provides a clear retrieval path without introducing the operational complexity of a dedicated vector database.
 
 At larger knowledge-base volumes, semantic retrieval and vector storage would be a natural next step.
 
@@ -175,7 +171,7 @@ At larger knowledge-base volumes, semantic retrieval and vector storage would be
 
 LLM applications introduce a unique operational risk: a software bug, retry loop, unexpected traffic spike, or runaway workflow can translate directly into API costs.
 
-Magni addresses this with multiple independent layers of protection.
+Magni addresses this with multiple independent layers of protection:
 
 ### Atomic Database Usage Controls
 
@@ -193,33 +189,15 @@ An additional application-level safeguard provides a broader ceiling against run
 
 Cloud-level spending protection provides a final boundary outside the application itself.
 
-The layers are intentionally redundant.
-
-The objective is that a failure in one protection mechanism does not automatically become an unrestricted LLM billing event.
+The layers are intentionally redundant. A failure in one protection mechanism should not automatically become an unrestricted LLM billing event.
 
 ---
 
-## Billing Architecture
+## Billing & Account Management
 
 Magni integrates subscription billing through Stripe while maintaining application-side usage controls.
 
-The system separates:
-
-* Subscription state
-* Account identity
-* AI usage
-* Usage limits
-* Billing enforcement
-
-This allows usage decisions to be enforced by the application rather than relying exclusively on the payment provider.
-
-The design also accounts for concurrent requests so simultaneous operations cannot simply race past usage limits.
-
----
-
-## Authentication and Account Management
-
-Magni includes:
+The application includes:
 
 * JWT-based authentication
 * Password hashing with bcrypt
@@ -227,6 +205,7 @@ Magni includes:
 * Account management
 * Demo account provisioning
 * Subscription-aware application behavior
+* Application-level usage enforcement
 
 Authentication and billing boundaries remain separate from the AI orchestration layer so the model is not responsible for application security decisions.
 
@@ -248,7 +227,7 @@ Business Website
            Agent Orchestration
 ```
 
-This allows Magni to function as a support layer within an existing website rather than requiring a separate customer-facing destination.
+This allows Magni to function as a support layer within an existing website.
 
 ---
 
@@ -290,7 +269,7 @@ Scheduled maintenance is separated from the primary web application.
 
 Magni includes automated tests covering the primary agent workflow.
 
-Current test coverage includes:
+Current coverage includes:
 
 * Orchestrator behavior
 * Triage agent behavior
@@ -299,79 +278,23 @@ Current test coverage includes:
 
 Tests are located in the `tests/` directory.
 
-The intent is to treat the agent layer as application logic that can be tested, rather than relying exclusively on manual inspection of model responses.
-
----
-
-## Challenges Solved
-
-### Concurrent Usage Race Conditions
-
-Multiple simultaneous requests can observe the same usage state before updating it.
-
-The solution was to use atomic database operations and row-level locking when modifying usage counters.
-
-### Runaway AI Spending
-
-A single usage limit was not considered sufficient protection against model failures or unexpected traffic.
-
-Magni therefore uses several independent controls spanning the application, database, and infrastructure layers.
-
-### Tenant Data Isolation
-
-Because retrieved business knowledge is supplied directly to the model, tenant isolation must extend into the AI workflow.
-
-Retrieval is scoped to the relevant tenant before content reaches the Resolver Agent.
-
-### Deployment and Scheduled Jobs
-
-The initial deployment architecture coupled scheduled maintenance with the web application.
-
-This was changed to separate the scheduled reset service from the primary web process, resulting in clearer service responsibilities.
+The intent is to treat the agent layer as application logic that can be tested rather than relying exclusively on manual inspection of model responses.
 
 ---
 
 ## Project Structure
 
-The repository is organized around the actual application architecture:
-
 ```text
 magni/
 ├── agents/
-│   ├── escalation_agent.py
-│   ├── orchestrator.py
-│   ├── resolver_agent.py
-│   └── triage_agent.py
-│
 ├── core/
-│   ├── api_client.py
-│   ├── auth.py
-│   ├── billing_policies.py
-│   ├── client_guard.py
-│   ├── client_manager.py
-│   ├── conversation_manager.py
-│   ├── conversation_store.py
-│   ├── db.py
-│   ├── emailer.py
-│   ├── feedback_flow.py
-│   ├── intent_classifier.py
-│   ├── knowledge_base.py
-│   ├── models.py
-│   ├── security.py
-│   ├── support_flows.py
-│   └── utils.py
-│
 ├── data/
-│   ├── conversations.json
-│   └── knowledge_base.json
-│
 ├── docs/
 ├── routes/
 ├── scripts/
 ├── static/
 ├── templates/
 ├── tests/
-│
 ├── app.py
 ├── Procfile
 ├── railway.json
@@ -379,7 +302,7 @@ magni/
 └── requirements.txt
 ```
 
-The structure reflects the current repository rather than an aspirational architecture.
+The repository is organized around application responsibilities, keeping the AI agents, core services, routes, frontend assets, data, deployment configuration, and tests clearly separated.
 
 ---
 
@@ -416,8 +339,6 @@ I would introduce centralized:
 * Model usage analytics
 * Failure monitoring
 * Cost-per-conversation tracking
-
-This would make it possible to identify not only whether a request failed, but where and why the workflow failed.
 
 ### Stronger Model Evaluation
 
@@ -512,3 +433,4 @@ My background in professional operations influences how I approach these systems
 
 **GitHub:** [Z4kM4rm3l](https://github.com/Z4kM4rm3l)
 **Portfolio:** [zakarymarmel.netlify.app](https://zakarymarmel.netlify.app)
+
