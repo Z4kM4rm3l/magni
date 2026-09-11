@@ -26,11 +26,11 @@ Your boundaries:
 
 Always end responses with a clear next step or offer to help further."""
 
-def get_magni_response(message: str, history: list, intent: str) -> str:
+def get_magni_response(message: str, history: list, intent: str, client_id: str | None = None) -> str:
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
     try:
         flow_context = get_flow_context(intent)
-        kb_context = get_kb_context(message)
+        kb_context = get_kb_context(client_id, message) if client_id else ""
 
         # Build full system prompt with KB context if available
         full_system = f"{MAGNI_SYSTEM_PROMPT}\n\n{flow_context}"

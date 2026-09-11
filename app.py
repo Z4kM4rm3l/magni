@@ -139,6 +139,7 @@ def chat():
         session_id=session_id,
         history=history,
         api_key=api_key if is_paying_client else None,
+        client_id=None if is_paying_client else DEMO_CLIENT_ID,
     )
 
     intent = result.get("intent", "general")

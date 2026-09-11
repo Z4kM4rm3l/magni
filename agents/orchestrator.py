@@ -38,6 +38,7 @@ class Orchestrator:
         session_id: str,
         history: list,
         api_key: str | None = None,
+        client_id: str | None = None,
     ) -> dict:
         """
         Entry point for all chat traffic.
@@ -49,6 +50,7 @@ class Orchestrator:
         # Client identity for escalation emails — populated from billing gate.
         client_email = ""
         client_name = ""
+        resolved_client_id = client_id  # demo uses this; paying path overrides below
 
         # ── PAYING CLIENT BILLING GATE ───────────────────────────────────────
         if api_key:
@@ -68,6 +70,7 @@ class Orchestrator:
                 # Extract identity strings before closing the session.
                 client_email = client.email or ""
                 client_name = client.business_name or ""
+                resolved_client_id = client.id  # authoritative KB scope from the API key
             except Exception as e:
                 logger.error(f"Orchestrator billing gate error: {e}")
                 db.rollback()
@@ -123,6 +126,7 @@ class Orchestrator:
             "intent": intent,
             "history_summary": history_summary,
             "history": history,
+            "client_id": resolved_client_id,
         })
 
         # ── ESCALATION — resolver-directed ───────────────────────────────────
