@@ -1,4 +1,4 @@
-﻿import os
+import os
 import uuid
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from dotenv import load_dotenv
