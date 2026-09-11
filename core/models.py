@@ -13,6 +13,7 @@ class Client(Base):
     api_key       = Column(String, unique=True, index=True, nullable=False)
     business_name = Column(String, nullable=True)
     email         = Column(String, nullable=True)
+    password_hash = Column(String, nullable=True)  # set only for self-signup clients (client portal login)
     notes         = Column(String, nullable=True, default="")
     created_at    = Column(DateTime(timezone=True), nullable=True)
 
