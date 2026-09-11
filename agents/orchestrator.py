@@ -118,6 +118,7 @@ class Orchestrator:
                 "route": "escalation",
                 "escalation_action": esc_result["action"],
                 "alert_client": esc_result["alert_client"],
+                "client_id": resolved_client_id,
             }
 
         # ── RESOLVER ─────────────────────────────────────────────────────────
@@ -145,6 +146,7 @@ class Orchestrator:
                 "route": "resolver_escalated",
                 "escalation_action": esc_result["action"],
                 "alert_client": esc_result["alert_client"],
+                "client_id": resolved_client_id,
             }
 
         return {
@@ -152,6 +154,7 @@ class Orchestrator:
             "intent": intent,
             "session_id": session_id,
             "route": "resolver",
+            "client_id": resolved_client_id,
         }
 
 
