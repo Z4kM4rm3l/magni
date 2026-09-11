@@ -120,7 +120,7 @@ def widget_chat():
         f"intent={intent} route={result.get('route')}"
     )
 
-    start_conversation(session_id)
+    start_conversation(client.id, session_id)
     conversation_manager.add_message(session_id, "user", message)
     conversation_manager.add_message(session_id, "assistant", response_text)
     add_message_to_conversation(session_id, "user", message, intent)

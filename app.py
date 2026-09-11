@@ -150,11 +150,13 @@ def chat():
         f"Route: {result.get('route')} | Message: {message[:50]}"
     )
 
-    start_conversation(session_id)
+    conv_client_id = result.get("client_id")
+    if conv_client_id:
+        start_conversation(conv_client_id, session_id)
+        add_message_to_conversation(session_id, "user", message, intent)
+        add_message_to_conversation(session_id, "assistant", response, intent)
     conversation_manager.add_message(session_id, "user", message)
     conversation_manager.add_message(session_id, "assistant", response)
-    add_message_to_conversation(session_id, "user", message, intent)
-    add_message_to_conversation(session_id, "assistant", response, intent)
 
     return jsonify({
         "response": response,
@@ -450,13 +452,18 @@ def ai_insights():
 @app.route("/api/analytics", methods=["GET"])
 @api_login_required
 def analytics_data():
-    data = get_analytics_data()
-    return jsonify(data)
+    client_id, err = _resolve_admin_client_id(request.args)
+    if err:
+        return err
+    return jsonify(get_analytics_data(client_id))
  
 @app.route("/api/analytics/conversations", methods=["GET"])
 @api_login_required
 def analytics_conversations():
-    conversations = get_all_conversations()
+    client_id, err = _resolve_admin_client_id(request.args)
+    if err:
+        return err
+    conversations = get_all_conversations(client_id)
     # Return last 50, newest first, without full message content
     recent = sorted(conversations,
                    key=lambda x: x.get("started_at", 0), reverse=True)[:50]

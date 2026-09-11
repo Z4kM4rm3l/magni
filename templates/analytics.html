@@ -231,6 +231,14 @@
   <div class="page-title">Analytics Dashboard</div>
   <p class="page-subtitle">Real-time insights into customer conversations, resolution rates, and satisfaction.</p>
 
+  <!-- CLIENT SELECTOR -->
+  <div class="client-selector" style="margin:0 0 1.5rem; display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+    <label for="clientSelect" style="font-weight:600; font-size:0.9rem;">Analytics for:</label>
+    <select id="clientSelect" onchange="onClientChange()" style="padding:0.5rem 0.75rem; border-radius:8px; min-width:220px;">
+      <option value="">Loading clients...</option>
+    </select>
+  </div>
+
   <!-- TIME FILTER -->
   <div class="time-filter">
     <button class="filter-btn" onclick="setFilter('today')">Today</button>
@@ -325,9 +333,38 @@
     general: '#9b9b9b'
   };
 
-  async function loadAnalytics() {
+  let currentClientId = null;
+
+  async function loadClients() {
     try {
-      const res = await fetch('/api/analytics');
+      const res = await fetch('/api/clients');
+      const data = await res.json();
+      const clients = data.clients || [];
+      const sel = document.getElementById('clientSelect');
+      if (clients.length === 0) {
+        sel.innerHTML = '<option value="">No clients found</option>';
+        return;
+      }
+      sel.innerHTML = clients
+        .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.business_name || c.id)}</option>`)
+        .join('');
+      currentClientId = sel.value;
+      await loadAnalytics();
+    } catch (e) {
+      const sel = document.getElementById('clientSelect');
+      if (sel) sel.innerHTML = '<option value="">Could not load clients</option>';
+    }
+  }
+
+  function onClientChange() {
+    currentClientId = document.getElementById('clientSelect').value;
+    loadAnalytics();
+  }
+
+  async function loadAnalytics() {
+    if (!currentClientId) return;
+    try {
+      const res = await fetch('/api/analytics?client_id=' + encodeURIComponent(currentClientId));
       analyticsData = await res.json();
       updateDashboard();
       generateInsights();
@@ -554,7 +591,7 @@ Return ONLY the JSON array, no other text.`;
     return div.innerHTML;
   }
 
-  loadAnalytics();
+  loadClients();
 </script>
 </body>
 </html>
