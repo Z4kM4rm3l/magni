@@ -28,6 +28,10 @@ from core.client_manager import (
     delete_client, get_client_stats
 )
 from core.auth import login_required, api_login_required, attempt_login, logout, get_safe_redirect
+from core.client_auth import (
+    authenticate_client, set_client_password, email_exists,
+    log_in_client, log_out_client, current_client_id, client_login_required,
+)
 from core.security import apply_security_headers
 from core.utils import sanitize_input, logger
 # SQL-backed multi-tenant billing
@@ -228,6 +232,63 @@ def admin_login():
 def admin_logout():
     logout()
     return redirect(url_for("admin_login"))
+
+# ── CLIENT SELF-SERVE (signup / login / portal) ─────────────────────────────
+
+def _embed_snippet(api_key: str) -> str:
+    base = request.host_url.rstrip("/")
+    return f'<script src="{base}/widget/magni.js" data-api-key="{api_key}"></script>'
+
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if request.method == "POST":
+        business_name = sanitize_input(request.form.get("business_name", "").strip())
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        if not business_name or not email or not password:
+            return render_template("signup.html", error="All fields are required.")
+        if "@" not in email or "." not in email:
+            return render_template("signup.html", error="Please enter a valid email address.")
+        if len(password) < 8:
+            return render_template("signup.html", error="Password must be at least 8 characters.")
+        if email_exists(email):
+            return render_template("signup.html", error="An account with that email already exists.")
+        client = create_client(business_name=business_name, email=email, tier="starter")
+        set_client_password(client["client_id"], password)
+        log_in_client(client["client_id"])
+        logger.info(f"Self-serve signup: {business_name} ({email})")
+        return redirect(url_for("client_portal"))
+    return render_template("signup.html", error=None)
+
+
+@app.route("/client/login", methods=["GET", "POST"])
+def client_login():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        cid = authenticate_client(email, password)
+        if cid:
+            log_in_client(cid)
+            return redirect(url_for("client_portal"))
+        return render_template("client_login.html", error="Invalid email or password.")
+    return render_template("client_login.html", error=None)
+
+
+@app.route("/client/logout")
+def client_logout():
+    log_out_client()
+    return redirect(url_for("client_login"))
+
+
+@app.route("/portal")
+@client_login_required
+def client_portal():
+    client = get_client(current_client_id())
+    if not client:
+        log_out_client()
+        return redirect(url_for("client_login"))
+    return render_template("portal.html", client=client, embed_snippet=_embed_snippet(client["api_key"]))
  
 # â”€â”€ ADMIN HUB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  

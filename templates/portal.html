@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard · Magni</title>
+  <style>
+    :root { --bg:#0f0f11; --card:#1a1a1e; --text:#e8e8ea; --dim:#9b9b9b; --accent:#f59e0b; --border:#2a2a30; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
+    header { display:flex; align-items:center; justify-content:space-between; padding:1.1rem 2rem; border-bottom:1px solid var(--border); }
+    .brand { font-size:1.2rem; font-weight:700; } .brand span { color:var(--accent); }
+    .logout { color:var(--dim); text-decoration:none; font-size:0.85rem; }
+    .logout:hover { color:var(--text); }
+    .container { max-width:820px; margin:0 auto; padding:2rem; }
+    h1 { font-size:1.6rem; margin:0 0 0.25rem; }
+    .sub { color:var(--dim); margin:0 0 2rem; font-size:0.9rem; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:1.5rem; margin-bottom:1.5rem; }
+    .card h2 { font-size:1.05rem; margin:0 0 0.35rem; }
+    .card p { color:var(--dim); font-size:0.88rem; margin:0 0 1rem; }
+    .row { display:flex; gap:0.6rem; align-items:center; }
+    code, pre { background:#121216; border:1px solid var(--border); border-radius:8px; padding:0.65rem 0.8rem; font-family:ui-monospace,Menlo,monospace; font-size:0.82rem; color:#e8e8ea; overflow-x:auto; }
+    pre { flex:1; margin:0; white-space:pre-wrap; word-break:break-all; }
+    .copy { padding:0.6rem 0.9rem; border:1px solid var(--border); background:#121216; color:var(--accent); border-radius:8px; cursor:pointer; font-size:0.8rem; white-space:nowrap; }
+    .copy:hover { border-color:var(--accent); }
+    .meta { display:flex; gap:2rem; flex-wrap:wrap; margin-top:0.5rem; }
+    .meta div { font-size:0.85rem; } .meta .k { color:var(--dim); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Magni<span>.</span></div>
+    <a class="logout" href="/client/logout">Log out</a>
+  </header>
+  <div class="container">
+    <h1>Welcome, {{ client.business_name }}</h1>
+    <p class="sub">Your AI support agent is ready. Add it to your site with the snippet below.</p>
+
+    <div class="card">
+      <h2>Embed on your website</h2>
+      <p>Paste this just before the closing &lt;/body&gt; tag on any page.</p>
+      <div class="row">
+        <pre id="embed">{{ embed_snippet }}</pre>
+        <button class="copy" onclick="copyText('embed')">Copy</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Your API key</h2>
+      <p>Keep this private. It authenticates your widget with Magni.</p>
+      <div class="row">
+        <pre id="apikey">{{ client.api_key }}</pre>
+        <button class="copy" onclick="copyText('apikey')">Copy</button>
+      </div>
+      <div class="meta">
+        <div><span class="k">Plan:</span> {{ client.tier }}</div>
+        <div><span class="k">Usage:</span> {{ client.conversations_used }} / {{ client.conversation_limit }} this month</div>
+      </div>
+    </div>
+
+    <!-- Knowledge base + analytics sections are added in the next increment. -->
+  </div>
+  <script>
+    function copyText(id) {
+      const el = document.getElementById(id);
+      navigator.clipboard.writeText(el.textContent).then(() => {
+        const btn = el.parentElement.querySelector('.copy');
+        const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => btn.textContent = t, 1200);
+      });
+    }
+  </script>
+</body>
+</html>
