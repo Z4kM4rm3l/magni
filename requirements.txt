@@ -6,3 +6,4 @@ stripe
 psycopg2-binary
 SQLAlchemy
 bcrypt
+alembic==1.13.2

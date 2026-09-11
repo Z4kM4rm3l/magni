@@ -38,13 +38,14 @@ class ResolverAgent(BaseAgent):
         history_summary = payload.get("history_summary", "No prior context.")
         # history is a list of {role, content} dicts for Gemini chat context
         history = payload.get("history", [])
+        client_id = payload.get("client_id")
 
         # Configure Gemini here, not at module import, to avoid import-time side effects
         genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
         try:
             flow_context = get_flow_context(intent)
-            kb_context = get_kb_context(message)
+            kb_context = get_kb_context(client_id, message) if client_id else ""
 
             full_system = f"{MAGNI_SYSTEM_PROMPT}\n\n{flow_context}"
             if kb_context:

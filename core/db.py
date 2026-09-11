@@ -24,6 +24,19 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def init_db():
-    """Generates all relational database tables cleanly if they do not yet exist."""
-    import core.models  # Imports models to register them with Base.metadata
-    Base.metadata.create_all(bind=engine)
+    """Ensure the database schema exists and is current.
+
+    Alembic is the single source of truth for schema. create_all is no longer
+    used, because it can add missing tables but cannot evolve existing ones.
+    This applies any pending migrations up to head, so app startup and the
+    setup scripts still self-heal a fresh database.
+
+    On a database that predates Alembic (its tables already exist but there is
+    no alembic_version table), run `alembic stamp 0001` once before the first
+    upgrade so the baseline migration is not re-applied.
+    """
+    import core.models  # register models on Base.metadata
+    from alembic.config import Config
+    from alembic import command
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    command.upgrade(Config(os.path.join(repo_root, "alembic.ini")), "head")

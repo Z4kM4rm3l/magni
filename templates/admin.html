@@ -226,6 +226,14 @@
   <div class="page-title">Knowledge Base</div>
   <p class="page-subtitle">Add articles, FAQs, and policies that Magni will use to answer customer questions accurately.</p>
 
+  <!-- CLIENT SELECTOR -->
+  <div class="client-selector" style="margin:0.5rem 0 1.25rem; display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+    <label for="clientSelect" style="font-weight:600; color:var(--text-light); font-size:0.9rem;">Managing KB for:</label>
+    <select id="clientSelect" onchange="onClientChange()" style="padding:0.5rem 0.75rem; border-radius:8px; min-width:220px;">
+      <option value="">Loading clients…</option>
+    </select>
+  </div>
+
   <!-- STATS -->
   <div class="stats-row" id="statsRow">
     <div class="stat-card"><div class="stat-value" id="statTotal">—</div><div class="stat-label">Total Articles</div></div>
@@ -297,10 +305,41 @@
 <script>
   let editingId = null;
   let articles = [];
+  let currentClientId = null;
+
+  async function loadClients() {
+    try {
+      const res = await fetch('/api/clients');
+      const data = await res.json();
+      const clients = data.clients || [];
+      const sel = document.getElementById('clientSelect');
+      if (clients.length === 0) {
+        sel.innerHTML = '<option value="">No clients found</option>';
+        document.getElementById('articleList').innerHTML =
+          '<div class="empty-state"><div class="empty-state-icon">👥</div><p>No clients yet. Add a client before managing its knowledge base.</p></div>';
+        return;
+      }
+      sel.innerHTML = clients
+        .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.business_name || c.id)}</option>`)
+        .join('');
+      currentClientId = sel.value;
+      await loadArticles();
+    } catch (e) {
+      document.getElementById('clientSelect').innerHTML =
+        '<option value="">Could not load clients</option>';
+    }
+  }
+
+  function onClientChange() {
+    currentClientId = document.getElementById('clientSelect').value;
+    cancelEdit();
+    loadArticles();
+  }
 
   async function loadArticles() {
+    if (!currentClientId) return;
     try {
-      const res = await fetch('/api/kb');
+      const res = await fetch('/api/kb?client_id=' + encodeURIComponent(currentClientId));
       const data = await res.json();
       articles = data.articles || [];
       renderArticles(articles);
@@ -363,6 +402,10 @@
       showToast('Title and content are required.', 'error');
       return;
     }
+    if (!currentClientId) {
+      showToast('Select a client first.', 'error');
+      return;
+    }
 
     const btn = document.getElementById('submitBtn');
     btn.disabled = true;
@@ -375,7 +418,7 @@
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content, category })
+        body: JSON.stringify({ title, content, category, client_id: currentClientId })
       });
 
       const data = await res.json();
@@ -436,7 +479,7 @@
     if (!confirm('Delete this article? Magni will no longer use it to answer questions.')) return;
 
     try {
-      const res = await fetch(`/api/kb/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/kb/${id}?client_id=` + encodeURIComponent(currentClientId), { method: 'DELETE' });
       if (res.ok) {
         showToast('Article deleted.', 'success');
         await loadArticles();
@@ -468,7 +511,7 @@
   }
 
   // Load on start
-  loadArticles();
+  loadClients();
 </script>
 </body>
 </html>

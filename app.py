@@ -1,4 +1,4 @@
-﻿import os
+import os
 import uuid
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from dotenv import load_dotenv
@@ -139,6 +139,7 @@ def chat():
         session_id=session_id,
         history=history,
         api_key=api_key if is_paying_client else None,
+        client_id=None if is_paying_client else DEMO_CLIENT_ID,
     )
 
     intent = result.get("intent", "general")
@@ -250,16 +251,46 @@ def admin_analytics():
  
 # â”€â”€ KNOWLEDGE BASE ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
+def _resolve_admin_client_id(source):
+    """Resolve and validate the target client_id for an admin KB operation.
+
+    `source` is request.args (GET/DELETE) or the parsed JSON body (POST/PUT).
+    The admin operator manages every tenant's KB, so any existing client is
+    allowed; we reject only a missing or unknown client_id, so a write can
+    never land on a nonexistent tenant. Returns (client_id, None) on success,
+    or (None, (response, status)) on failure.
+    """
+    cid = (source.get("client_id") or "").strip()
+    if not cid:
+        return None, (jsonify({"error": "client_id is required"}), 400)
+    db = SessionLocal()
+    try:
+        exists = db.query(Client.id).filter(Client.id == cid).first() is not None
+    finally:
+        db.close()
+    if not exists:
+        return None, (jsonify({"error": "Unknown client_id"}), 404)
+    return cid, None
+
+
 @app.route("/api/kb", methods=["GET"])
 @api_login_required
 def kb_list():
-    articles = get_all_articles()
-    return jsonify({"articles": articles, "categories": get_categories()})
+    client_id, err = _resolve_admin_client_id(request.args)
+    if err:
+        return err
+    return jsonify({
+        "articles": get_all_articles(client_id),
+        "categories": get_categories(client_id),
+    })
  
 @app.route("/api/kb", methods=["POST"])
 @api_login_required
 def kb_create():
-    data = request.get_json()
+    data = request.get_json() or {}
+    client_id, err = _resolve_admin_client_id(data)
+    if err:
+        return err
     if not data or not data.get("title") or not data.get("content"):
         return jsonify({"error": "Title and content are required"}), 400
  
@@ -270,14 +301,17 @@ def kb_create():
     if len(content) < 10:
         return jsonify({"error": "Content too short"}), 400
  
-    article = add_article(title, content, category)
-    logger.info(f"KB article added: {title}")
+    article = add_article(client_id, title, content, category)
+    logger.info(f"KB article added for client {client_id[:8]}: {title}")
     return jsonify({"article": article}), 201
  
 @app.route("/api/kb/<article_id>", methods=["GET"])
 @api_login_required
 def kb_get(article_id):
-    article = get_article(article_id)
+    client_id, err = _resolve_admin_client_id(request.args)
+    if err:
+        return err
+    article = get_article(client_id, article_id)
     if not article:
         return jsonify({"error": "Article not found"}), 404
     return jsonify({"article": article})
@@ -285,11 +319,15 @@ def kb_get(article_id):
 @app.route("/api/kb/<article_id>", methods=["PUT"])
 @api_login_required
 def kb_update(article_id):
-    data = request.get_json()
+    data = request.get_json() or {}
+    client_id, err = _resolve_admin_client_id(data)
+    if err:
+        return err
     if not data or not data.get("title") or not data.get("content"):
         return jsonify({"error": "Title and content are required"}), 400
  
     article = update_article(
+        client_id,
         article_id,
         sanitize_input(data["title"]),
         data["content"].strip(),
@@ -303,7 +341,10 @@ def kb_update(article_id):
 @app.route("/api/kb/<article_id>", methods=["DELETE"])
 @api_login_required
 def kb_delete(article_id):
-    success = delete_article(article_id)
+    client_id, err = _resolve_admin_client_id(request.args)
+    if err:
+        return err
+    success = delete_article(client_id, article_id)
     if not success:
         return jsonify({"error": "Article not found"}), 404
     return jsonify({"status": "deleted"})
