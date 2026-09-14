@@ -96,6 +96,21 @@ def index():
         session["session_id"] = str(uuid.uuid4())
     return render_template("chat.html")
  
+def _caller_client_id():
+    """Authoritative client_id for a public chat/resolve/feedback request: the
+    API-key header identifies a paying client, otherwise it's the demo client.
+    Returns None if an API key is supplied but does not match a client."""
+    api_key = request.headers.get("X-Magni-API-Key", "").strip()
+    if api_key and api_key != DEMO_API_KEY:
+        db = SessionLocal()
+        try:
+            c = db.query(Client).filter(Client.api_key == api_key).first()
+            return c.id if c else None
+        finally:
+            db.close()
+    return DEMO_CLIENT_ID
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json()
@@ -135,8 +150,13 @@ def chat():
                 }), 200
     # â”€â”€ END DEMO GUARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
-    session_id = data.get("session_id") or session.get("session_id", str(uuid.uuid4()))
-    history = conversation_manager.get_history(session_id)
+    session_id = data.get("session_id") or str(uuid.uuid4())
+
+    # In-memory history is namespaced by the authoritative tenant, so two
+    # tenants submitting the same session_id never share live context.
+    chat_client_id = _caller_client_id()
+    mem_key = f"{chat_client_id or 'anon'}:{session_id}"
+    history = conversation_manager.get_history(mem_key)
 
     result = orchestrator.run(
         message=message,
@@ -157,10 +177,10 @@ def chat():
     conv_client_id = result.get("client_id")
     if conv_client_id:
         start_conversation(conv_client_id, session_id)
-        add_message_to_conversation(session_id, "user", message, intent)
-        add_message_to_conversation(session_id, "assistant", response, intent)
-    conversation_manager.add_message(session_id, "user", message)
-    conversation_manager.add_message(session_id, "assistant", response)
+        add_message_to_conversation(conv_client_id, session_id, "user", message, intent)
+        add_message_to_conversation(conv_client_id, session_id, "assistant", response, intent)
+    conversation_manager.add_message(mem_key, "user", message)
+    conversation_manager.add_message(mem_key, "assistant", response)
 
     return jsonify({
         "response": response,
@@ -181,7 +201,11 @@ def resolve():
     if session_id is None or resolved is None:
         return jsonify({"error": "Missing fields"}), 400
  
-    set_resolution(session_id, bool(resolved))
+    client_id = _caller_client_id()
+    if not client_id:
+        return jsonify({"error": "Unauthorized"}), 401
+    if not set_resolution(client_id, session_id, bool(resolved)):
+        return jsonify({"error": "Conversation not found"}), 404
     return jsonify({"status": "ok"})
  
 @app.route("/feedback", methods=["POST"])
@@ -197,9 +221,15 @@ def feedback():
     if not isinstance(rating, int) or rating < 1 or rating > 5:
         return jsonify({"error": "Rating must be 1-5"}), 400
  
-    # Save to both feedback store and conversation store
+    client_id = _caller_client_id()
+    if not client_id:
+        return jsonify({"error": "Unauthorized"}), 401
+    # Prove conversation ownership BEFORE persisting anything (incl. the
+    # separate feedback store), so a valid tenant can't write feedback onto
+    # another tenant's conversation.
+    if not set_rating(client_id, session_id, rating, comment):
+        return jsonify({"error": "Conversation not found"}), 404
     save_feedback(session_id, rating, comment)
-    set_rating(session_id, rating, comment)
  
     return jsonify({"status": "Thank you for your feedback!"})
  
@@ -208,7 +238,7 @@ def reset():
     data = request.get_json()
     session_id = data.get("session_id") if data else None
     if session_id:
-        conversation_manager.reset_session(session_id)
+        conversation_manager.reset_session(f"{_caller_client_id() or 'anon'}:{session_id}")
     return jsonify({"status": "Session reset"})
  
 @app.route("/health")
