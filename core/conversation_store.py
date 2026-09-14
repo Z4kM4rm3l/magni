@@ -74,6 +74,9 @@ def start_conversation(client_id: str, session_id: str, initial_intent: str = "g
     try:
         c = db.get(Conversation, session_id)
         if c:
+            if c.client_id != client_id:
+                logger.warning(f"start_conversation: session {str(session_id)[:8]} already owned by another client - refusing")
+                return {}
             return _conv_to_dict(c)
         now = datetime.now(timezone.utc)
         c = Conversation(
@@ -106,14 +109,15 @@ def start_conversation(client_id: str, session_id: str, initial_intent: str = "g
         db.close()
 
 
-def add_message_to_conversation(session_id: str, role: str, content: str, current_intent: str = None) -> bool:
-    """Append a message to an existing conversation. Never creates one:
-    if the session is unknown, logs and returns False."""
+def add_message_to_conversation(client_id: str, session_id: str, role: str, content: str, current_intent: str = None) -> bool:
+    """Append a message to a conversation owned by client_id. Never creates one,
+    and never touches another tenant's conversation: if there is no conversation
+    matching (client_id, session_id), logs and returns False."""
     db = SessionLocal()
     try:
         c = db.get(Conversation, session_id)
-        if not c:
-            logger.warning(f"add_message: unknown session {str(session_id)[:8]} - not logging (no owning conversation)")
+        if not c or c.client_id != client_id:
+            logger.warning(f"add_message: no conversation for (client={str(client_id)[:8]}, session={str(session_id)[:8]}) - not logging")
             return False
         db.add(Message(
             session_id=session_id,
@@ -177,15 +181,15 @@ def _last_turns(db, session_id: str):
     return last_user, last_agent, len(rows)
 
 
-def set_resolution(session_id: str, client_resolved: bool = None) -> dict:
+def set_resolution(client_id: str, session_id: str, client_resolved: bool = None) -> dict:
     """Hybrid resolution pipeline (explicit override -> keyword heuristics ->
-    asymmetric AI fallback). Locates the conversation by session_id; never
-    creates one."""
+    asymmetric AI fallback). Locates the conversation by (client_id, session_id);
+    never creates one and never touches another tenant's conversation."""
     db = SessionLocal()
     try:
         c = db.get(Conversation, session_id)
-        if not c:
-            logger.warning(f"set_resolution: unknown session {str(session_id)[:8]} - no-op")
+        if not c or c.client_id != client_id:
+            logger.warning(f"set_resolution: no conversation for (client={str(client_id)[:8]}, session={str(session_id)[:8]}) - no-op")
             return {}
 
         last_user_text, last_agent_text, msg_count = _last_turns(db, session_id)
@@ -240,13 +244,13 @@ def set_resolution(session_id: str, client_resolved: bool = None) -> dict:
         db.close()
 
 
-def set_rating(session_id: str, rating: int, comment: str = "") -> bool:
-    """Attach a rating/comment to an existing conversation by session_id."""
+def set_rating(client_id: str, session_id: str, rating: int, comment: str = "") -> bool:
+    """Attach a rating/comment to a conversation owned by client_id."""
     db = SessionLocal()
     try:
         c = db.get(Conversation, session_id)
-        if not c:
-            logger.warning(f"set_rating: unknown session {str(session_id)[:8]} - no-op")
+        if not c or c.client_id != client_id:
+            logger.warning(f"set_rating: no conversation for (client={str(client_id)[:8]}, session={str(session_id)[:8]}) - no-op")
             return False
         c.rating = rating
         c.feedback_comment = comment

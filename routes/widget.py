@@ -103,7 +103,8 @@ def widget_chat():
         return jsonify({"error": "Empty message"}), 400
 
     session_id = data.get("session_id") or str(uuid.uuid4())
-    history = conversation_manager.get_history(session_id)
+    mem_key = f"{client.id}:{session_id}"
+    history = conversation_manager.get_history(mem_key)
 
     result = orchestrator.run(
         message=message,
@@ -121,10 +122,10 @@ def widget_chat():
     )
 
     start_conversation(client.id, session_id)
-    conversation_manager.add_message(session_id, "user", message)
-    conversation_manager.add_message(session_id, "assistant", response_text)
-    add_message_to_conversation(session_id, "user", message, intent)
-    add_message_to_conversation(session_id, "assistant", response_text, intent)
+    conversation_manager.add_message(mem_key, "user", message)
+    conversation_manager.add_message(mem_key, "assistant", response_text)
+    add_message_to_conversation(client.id, session_id, "user", message, intent)
+    add_message_to_conversation(client.id, session_id, "assistant", response_text, intent)
 
     resp = make_response(jsonify({
         "response":   response_text,
@@ -151,7 +152,7 @@ _MAGNI_JS = r"""
 
   var API_KEY = script.getAttribute('data-api-key');
   var BASE_URL = script.src.replace('/widget/magni.js', '');
-  var sessionId = 'mgn_' + Math.random().toString(36).slice(2);
+  var sessionId = null;  // server-issued on first message
   var config = { bot_name: 'Magni', primary_color: '#f59e0b', welcome_message: 'Hi! How can I help you today?' };
 
   // ── Fetch config ────────────────────────────────────────────────────────
@@ -238,10 +239,10 @@ _MAGNI_JS = r"""
     fetch(BASE_URL + '/widget/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Magni-API-Key': API_KEY },
-      body: JSON.stringify({ message: text, session_id: sessionId })
+      body: JSON.stringify(sessionId ? { message: text, session_id: sessionId } : { message: text })
     })
       .then(function (r) { return r.json(); })
-      .then(function (data) { appendMsg(data.response || 'Sorry, something went wrong.', 'bot'); })
+      .then(function (data) { if (data.session_id) sessionId = data.session_id; appendMsg(data.response || 'Sorry, something went wrong.', 'bot'); })
       .catch(function () { appendMsg('Connection error. Please try again.', 'bot'); });
   }
 })();
