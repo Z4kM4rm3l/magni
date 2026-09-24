@@ -47,7 +47,7 @@ def authenticate_client(email: str, raw_password: str) -> str | None:
     try:
         c = (
             db.query(Client)
-            .filter(Client.email == email, Client.password_hash.isnot(None))
+            .filter(Client.email == email, Client.password_hash.isnot(None), Client.is_active == True)
             .first()
         )
         if c and check_password_hash(c.password_hash, raw_password):
@@ -77,10 +77,20 @@ def log_out_client():
 
 
 def is_client_session_valid() -> bool:
-    if not session.get("client_id"):
+    cid = session.get("client_id")
+    if not cid:
         return False
     started = session.get("client_login_time", 0)
     if time.time() - started > CLIENT_SESSION_TTL:
+        log_out_client()
+        return False
+    # A client suspended or deleted mid-session is forced out on the next request.
+    db = SessionLocal()
+    try:
+        active = db.query(Client.id).filter(Client.id == cid, Client.is_active == True).first() is not None
+    finally:
+        db.close()
+    if not active:
         log_out_client()
         return False
     return True
@@ -98,5 +108,9 @@ def client_login_required(f):
             if request.path.startswith("/api/"):
                 return jsonify({"error": "Not authenticated"}), 401
             return redirect(url_for("client_login"))
+        # Mutating requests must carry a valid CSRF token.
+        from core.csrf import csrf_required_for_request, csrf_valid
+        if csrf_required_for_request() and not csrf_valid():
+            return jsonify({"error": "Invalid or missing CSRF token."}), 403
         return f(*args, **kwargs)
     return decorated

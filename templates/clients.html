@@ -6,6 +6,25 @@
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#08081a">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <script>
+    // Auto-attach the CSRF token to same-origin mutating fetch() calls.
+    (function () {
+      var m = document.querySelector('meta[name="csrf-token"]'); if (!m) return;
+      var tok = m.getAttribute('content'), orig = window.fetch;
+      window.fetch = function (url, opts) {
+        opts = opts || {};
+        var method = (opts.method || 'GET').toUpperCase();
+        var target = new URL(typeof url === 'string' ? url : url.url, window.location.href);
+        var sameOrigin = target.origin === window.location.origin;
+        if (sameOrigin && ['POST', 'PUT', 'PATCH', 'DELETE'].indexOf(method) !== -1) {
+          if (opts.headers instanceof Headers) { opts.headers.set('X-CSRF-Token', tok); }
+          else { opts.headers = Object.assign({}, opts.headers || {}, { 'X-CSRF-Token': tok }); }
+        }
+        return orig.call(this, url, opts);
+      };
+    })();
+  </script>
   <title>Magni — Client Management</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">

@@ -167,10 +167,14 @@ def login_required(f):
 
 
 def api_login_required(f):
-    """Protect admin API routes — returns 401 JSON instead of redirecting."""
+    """Protect admin API routes — returns 401 JSON instead of redirecting.
+    Mutating requests must also carry a valid CSRF token (403 otherwise)."""
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         if not is_session_valid():
             return jsonify({"error": "Authentication required."}), 401
+        from core.csrf import csrf_required_for_request, csrf_valid
+        if csrf_required_for_request() and not csrf_valid():
+            return jsonify({"error": "Invalid or missing CSRF token."}), 403
         return f(*args, **kwargs)
     return decorated

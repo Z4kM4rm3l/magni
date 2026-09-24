@@ -137,6 +137,20 @@ def get_client(client_id: str) -> dict | None:
         db.close()
 
 
+def get_client_by_api_key(api_key: str, active_only: bool = False) -> Client | None:
+    """Single source of truth for api-key -> Client resolution (used by the
+    widget and the public chat/resolve/feedback routes). Returns the detached
+    ORM object with its column attributes loaded, or None."""
+    db = SessionLocal()
+    try:
+        q = db.query(Client).filter(Client.api_key == api_key)
+        if active_only:
+            q = q.filter(Client.is_active == True)
+        return q.first()
+    finally:
+        db.close()
+
+
 def update_client(client_id: str, **kwargs) -> dict | None:
     db = SessionLocal()
     try:

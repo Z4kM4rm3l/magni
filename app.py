@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from dotenv import load_dotenv
@@ -23,7 +24,7 @@ from core.knowledge_base import (
     update_article, delete_article, get_categories
 )
 from core.client_manager import (
-    create_client, get_all_clients, get_client,
+    create_client, get_all_clients, get_client, get_client_by_api_key,
     update_client, suspend_client, reactivate_client,
     delete_client, get_client_stats
 )
@@ -32,6 +33,7 @@ from core.client_auth import (
     authenticate_client, set_client_password, email_exists,
     log_in_client, log_out_client, current_client_id, client_login_required,
 )
+from core.csrf import get_csrf_token, rotate_csrf_token, csrf_valid
 from core.security import apply_security_headers
 from core.utils import sanitize_input, logger
 # SQL-backed multi-tenant billing
@@ -47,6 +49,13 @@ _is_production = os.getenv("FLASK_ENV", "production") != "development"
 app.config["SESSION_COOKIE_SECURE"]   = _is_production
 app.config["SESSION_COOKIE_HTTPONLY"]  = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1 MB cap on request bodies
+
+
+@app.context_processor
+def _inject_csrf_token():
+    # Available in every template as {{ csrf_token }} (meta tag / hidden field).
+    return {"csrf_token": get_csrf_token()}
 apply_security_headers(app)
  
 # Register Stripe billing blueprint
@@ -99,15 +108,12 @@ def index():
 def _caller_client_id():
     """Authoritative client_id for a public chat/resolve/feedback request: the
     API-key header identifies a paying client, otherwise it's the demo client.
-    Returns None if an API key is supplied but does not match a client."""
+    Returns None if an API key is supplied but does not match an ACTIVE client,
+    so a suspended client's key stops working on every public route."""
     api_key = request.headers.get("X-Magni-API-Key", "").strip()
     if api_key and api_key != DEMO_API_KEY:
-        db = SessionLocal()
-        try:
-            c = db.query(Client).filter(Client.api_key == api_key).first()
-            return c.id if c else None
-        finally:
-            db.close()
+        c = get_client_by_api_key(api_key, active_only=True)
+        return c.id if c else None
     return DEMO_CLIENT_ID
 
 
@@ -250,10 +256,13 @@ def health():
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
+        if not csrf_valid():
+            return render_template("login.html", error="Your session expired. Please try again."), 403
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         success, error_msg = attempt_login(username, password)
         if success:
+            rotate_csrf_token()
             return redirect(get_safe_redirect("/admin"))
         return render_template("login.html", error=error_msg)
     return render_template("login.html", error=None)
@@ -273,6 +282,8 @@ def _embed_snippet(api_key: str) -> str:
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
+        if not csrf_valid():
+            return render_template("signup.html", error="Your session expired. Please try again."), 403
         business_name = sanitize_input(request.form.get("business_name", "").strip())
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
@@ -287,6 +298,7 @@ def signup():
         client = create_client(business_name=business_name, email=email, tier="starter")
         set_client_password(client["client_id"], password)
         log_in_client(client["client_id"])
+        rotate_csrf_token()
         logger.info(f"Self-serve signup: {business_name} ({email})")
         return redirect(url_for("client_portal"))
     return render_template("signup.html", error=None)
@@ -295,11 +307,14 @@ def signup():
 @app.route("/client/login", methods=["GET", "POST"])
 def client_login():
     if request.method == "POST":
+        if not csrf_valid():
+            return render_template("client_login.html", error="Your session expired. Please try again."), 403
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         cid = authenticate_client(email, password)
         if cid:
             log_in_client(cid)
+            rotate_csrf_token()
             return redirect(url_for("client_portal"))
         return render_template("client_login.html", error="Invalid email or password.")
     return render_template("client_login.html", error=None)
@@ -319,6 +334,136 @@ def client_portal():
         log_out_client()
         return redirect(url_for("client_login"))
     return render_template("portal.html", client=client, embed_snippet=_embed_snippet(client["api_key"]))
+
+
+# Portal API — client_id comes ONLY from the session (current_client_id()),
+# never a request parameter, so a logged-in client can reach only its own data.
+_KB_TITLE_MAX = 200
+_KB_CONTENT_MIN = 10
+_KB_CONTENT_MAX = 20000
+_KB_CATEGORY_MAX = 50
+_HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+_SETTINGS_MAX = {"business_name": 120, "bot_name": 60, "welcome_message": 300}
+
+
+def _validate_kb_payload(data):
+    """Shared validation for KB create/update. Returns (fields, None) or (None, error_response)."""
+    title = sanitize_input((data.get("title") or "")).strip()
+    content = (data.get("content") or "").strip()
+    category = (sanitize_input((data.get("category") or "general")).strip() or "general")[:_KB_CATEGORY_MAX]
+    if not title or not content:
+        return None, (jsonify({"error": "Title and content are required"}), 400)
+    if len(title) > _KB_TITLE_MAX:
+        return None, (jsonify({"error": f"Title too long (max {_KB_TITLE_MAX} characters)"}), 400)
+    if len(content) < _KB_CONTENT_MIN:
+        return None, (jsonify({"error": "Content too short"}), 400)
+    if len(content) > _KB_CONTENT_MAX:
+        return None, (jsonify({"error": f"Content too long (max {_KB_CONTENT_MAX} characters)"}), 400)
+    return {"title": title, "content": content, "category": category}, None
+
+
+_DOMAIN_RE = re.compile(r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+_MAX_DOMAINS = 20
+
+
+def _parse_allowed_domains(raw):
+    """Normalize (lowercase, strip scheme/path/trailing dots, dedupe) and validate.
+    Returns (domains, None) or (None, error_response). Rejects malformed entries
+    and more than _MAX_DOMAINS instead of silently discarding them."""
+    items = raw.split(",") if isinstance(raw, str) else (raw if isinstance(raw, list) else [])
+    out = []
+    for d in items:
+        d = str(d).strip().lower()
+        if not d:
+            continue
+        if "://" in d:
+            d = d.split("://", 1)[1]
+        d = d.split("/", 1)[0].split("?", 1)[0].strip(".")
+        if not d:
+            continue
+        if d != "localhost" and not _DOMAIN_RE.match(d):
+            return None, (jsonify({"error": f"Invalid domain: {d}"}), 400)
+        if d not in out:
+            out.append(d)
+    if len(out) > _MAX_DOMAINS:
+        return None, (jsonify({"error": f"Maximum {_MAX_DOMAINS} allowed domains"}), 400)
+    return out, None
+
+
+@app.route("/api/portal/kb", methods=["GET"])
+@client_login_required
+def portal_kb_list():
+    cid = current_client_id()
+    return jsonify({"articles": get_all_articles(cid), "categories": get_categories(cid)})
+
+
+@app.route("/api/portal/kb", methods=["POST"])
+@client_login_required
+def portal_kb_create():
+    cid = current_client_id()
+    fields, err = _validate_kb_payload(request.get_json() or {})
+    if err:
+        return err
+    article = add_article(cid, fields["title"], fields["content"], fields["category"])
+    return jsonify({"article": article}), 201
+
+
+@app.route("/api/portal/kb/<article_id>", methods=["PUT"])
+@client_login_required
+def portal_kb_update(article_id):
+    cid = current_client_id()
+    fields, err = _validate_kb_payload(request.get_json() or {})
+    if err:
+        return err
+    article = update_article(cid, article_id, fields["title"], fields["content"], fields["category"])
+    if not article:
+        return jsonify({"error": "Article not found"}), 404
+    return jsonify({"article": article})
+
+
+@app.route("/api/portal/kb/<article_id>", methods=["DELETE"])
+@client_login_required
+def portal_kb_delete(article_id):
+    cid = current_client_id()
+    if not delete_article(cid, article_id):
+        return jsonify({"error": "Article not found"}), 404
+    return jsonify({"status": "deleted"})
+
+
+@app.route("/api/portal/analytics", methods=["GET"])
+@client_login_required
+def portal_analytics():
+    return jsonify(get_analytics_data(current_client_id()))
+
+
+@app.route("/api/portal/settings", methods=["PUT"])
+@client_login_required
+def portal_settings():
+    """Update the logged-in client's own widget settings. Only a safe subset of
+    fields is editable here (never tier, email, api_key, or limits)."""
+    cid = current_client_id()
+    data = request.get_json() or {}
+    updates = {}
+    for field, maxlen in _SETTINGS_MAX.items():
+        if field in data:
+            v = sanitize_input(data[field]).strip()
+            if len(v) > maxlen:
+                return jsonify({"error": f"{field} too long (max {maxlen} characters)"}), 400
+            updates[field] = v
+    if "primary_color" in data:
+        color = (data.get("primary_color") or "").strip()
+        if not _HEX_COLOR.match(color):
+            return jsonify({"error": "primary_color must be a hex value like #f59e0b"}), 400
+        updates["primary_color"] = color
+    if "allowed_domains" in data:
+        domains, derr = _parse_allowed_domains(data["allowed_domains"])
+        if derr:
+            return derr
+        updates["allowed_domains"] = domains
+    client = update_client(cid, **updates)
+    if not client:
+        return jsonify({"error": "Client not found"}), 404
+    return jsonify({"client": client})
  
 # â”€â”€ ADMIN HUB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  

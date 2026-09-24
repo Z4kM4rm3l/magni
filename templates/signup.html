@@ -28,6 +28,7 @@
     <div class="sub">Create your account and get an AI support agent for your site.</div>
     {% if error %}<div class="err">{{ error }}</div>{% endif %}
     <form method="POST" action="/signup">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label for="business_name">Business name</label>
       <input id="business_name" name="business_name" type="text" required>
       <label for="email">Email</label>
