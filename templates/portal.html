@@ -3,6 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <script>
+    // Auto-attach the CSRF token to same-origin mutating fetch() calls.
+    (function () {
+      var m = document.querySelector('meta[name="csrf-token"]'); if (!m) return;
+      var tok = m.getAttribute('content'), orig = window.fetch;
+      window.fetch = function (url, opts) {
+        opts = opts || {};
+        var method = (opts.method || 'GET').toUpperCase();
+        var target = new URL(typeof url === 'string' ? url : url.url, window.location.href);
+        var sameOrigin = target.origin === window.location.origin;
+        if (sameOrigin && ['POST', 'PUT', 'PATCH', 'DELETE'].indexOf(method) !== -1) {
+          if (opts.headers instanceof Headers) { opts.headers.set('X-CSRF-Token', tok); }
+          else { opts.headers = Object.assign({}, opts.headers || {}, { 'X-CSRF-Token': tok }); }
+        }
+        return orig.call(this, url, opts);
+      };
+    })();
+  </script>
   <title>Dashboard · Magni</title>
   <style>
     :root { --bg:#0f0f11; --card:#1a1a1e; --text:#e8e8ea; --dim:#9b9b9b; --accent:#f59e0b; --border:#2a2a30; }
@@ -46,8 +65,8 @@
     </div>
 
     <div class="card">
-      <h2>Your API key</h2>
-      <p>Keep this private. It authenticates your widget with Magni.</p>
+      <h2>Widget key</h2>
+      <p>This key is embedded in your website widget, so it is public by design. It identifies your account to Magni; it does not grant access to this dashboard.</p>
       <div class="row">
         <pre id="apikey">{{ client.api_key }}</pre>
         <button class="copy" onclick="copyText('apikey')">Copy</button>
@@ -58,7 +77,73 @@
       </div>
     </div>
 
-    <!-- Knowledge base + analytics sections are added in the next increment. -->
+    <div class="card">
+      <h2>Analytics</h2>
+      <p>How your assistant is performing this month.</p>
+      <div class="kpis" id="kpis">Loading...</div>
+    </div>
+
+    <div class="card">
+      <h2>Knowledge base</h2>
+      <p>Add the FAQs, policies, and docs your assistant should answer from. Changes take effect immediately.</p>
+      <div id="kbForm" class="kb-form">
+        <input id="kbTitle" type="text" placeholder="Title">
+        <input id="kbCategory" type="text" placeholder="Category (optional, e.g. billing)">
+        <textarea id="kbContent" rows="4" placeholder="What should the assistant know?"></textarea>
+        <div class="row">
+          <button class="btn-primary" onclick="saveArticle()">Save article</button>
+          <button class="btn-ghost" id="cancelEdit" onclick="cancelEdit()" style="display:none">Cancel</button>
+        </div>
+      </div>
+      <div id="kbList" class="kb-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>Settings</h2>
+      <p>Customize how your assistant looks and behaves.</p>
+      <div class="kb-form">
+        <label class="fld">Business name
+          <input id="setBusinessName" type="text" value="{{ client.business_name }}">
+        </label>
+        <label class="fld">Assistant name
+          <input id="setBotName" type="text" value="{{ client.bot_name }}">
+        </label>
+        <label class="fld">Welcome message
+          <input id="setWelcome" type="text" value="{{ client.welcome_message }}">
+        </label>
+        <label class="fld">Accent color
+          <input id="setColor" type="color" value="{{ client.primary_color }}">
+        </label>
+        <label class="fld">Allowed website domains (comma-separated)
+          <input id="setDomains" type="text" value="{{ client.allowed_domains|join(', ') }}" placeholder="example.com, www.example.com">
+        </label>
+        <div class="row">
+          <button class="btn-primary" onclick="saveSettings()">Save settings</button>
+          <span id="setStatus" class="set-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .kpis { display:flex; flex-wrap:wrap; gap:1rem; }
+      .kpi { flex:1; min-width:120px; background:#121216; border:1px solid var(--border); border-radius:10px; padding:0.9rem 1rem; }
+      .kpi-val { font-size:1.5rem; font-weight:700; color:var(--accent); }
+      .kpi-lbl { font-size:0.75rem; color:var(--dim); margin-top:0.2rem; }
+      .kb-form input, .kb-form textarea { width:100%; margin-bottom:0.6rem; padding:0.6rem 0.7rem; border-radius:8px; border:1px solid var(--border); background:#121216; color:var(--text); font-family:inherit; font-size:0.9rem; }
+      .kb-form input:focus, .kb-form textarea:focus { outline:none; border-color:var(--accent); }
+      .kb-form .fld { display:block; font-size:0.8rem; color:var(--dim); margin-bottom:0.35rem; }
+      .kb-form input[type=color] { height:40px; padding:0.2rem; width:80px; }
+      .btn-primary { padding:0.6rem 1rem; border:none; border-radius:8px; background:var(--accent); color:#1a1a1e; font-weight:700; cursor:pointer; }
+      .btn-ghost { padding:0.6rem 1rem; border:1px solid var(--border); border-radius:8px; background:transparent; color:var(--dim); cursor:pointer; }
+      .btn-ghost.danger { color:#ff8f8f; }
+      .set-status { font-size:0.82rem; color:var(--dim); align-self:center; }
+      .kb-list { margin-top:1.25rem; }
+      .kb-item { display:flex; align-items:center; justify-content:space-between; padding:0.75rem 0; border-top:1px solid var(--border); }
+      .kb-title { font-weight:600; font-size:0.92rem; }
+      .kb-cat { font-size:0.75rem; color:var(--dim); }
+      .kb-actions { display:flex; gap:0.5rem; }
+      .empty { color:var(--dim); font-size:0.88rem; padding:1rem 0; }
+    </style>
   </div>
   <script>
     function copyText(id) {
@@ -68,6 +153,107 @@
         const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => btn.textContent = t, 1200);
       });
     }
+
+    let articles = [];
+    let editingId = null;
+
+    function esc(s) { const d = document.createElement('div'); d.appendChild(document.createTextNode(s || '')); return d.innerHTML; }
+    function kpi(label, val) { return `<div class="kpi"><div class="kpi-val">${val}</div><div class="kpi-lbl">${label}</div></div>`; }
+
+    async function loadAnalytics() {
+      try {
+        const res = await fetch('/api/portal/analytics');
+        if (!res.ok) throw new Error('bad status');
+        const d = await res.json();
+        const rr = d.resolution_rate.month, sat = d.satisfaction.month;
+        document.getElementById('kpis').innerHTML =
+          kpi('Conversations (30d)', d.totals.month) +
+          kpi('All time', d.totals.all_time) +
+          kpi('Resolution rate', rr != null ? rr + '%' : 'N/A') +
+          kpi('Avg messages', d.avg_messages.month) +
+          kpi('Satisfaction', sat ? sat + '/5' : 'N/A');
+      } catch (e) { document.getElementById('kpis').textContent = 'Could not load analytics.'; }
+    }
+
+    async function loadArticles() {
+      try {
+        const res = await fetch('/api/portal/kb');
+        if (!res.ok) throw new Error('bad status');
+        const d = await res.json();
+        articles = d.articles || [];
+        const list = document.getElementById('kbList');
+        if (!articles.length) { list.innerHTML = '<div class="empty">No articles yet. Add your first above.</div>'; return; }
+        list.innerHTML = articles.map(a => `
+          <div class="kb-item">
+            <div><div class="kb-title">${esc(a.title)}</div><div class="kb-cat">${esc(a.category || 'general')}</div></div>
+            <div class="kb-actions">
+              <button class="btn-ghost" onclick="editArticle('${a.id}')">Edit</button>
+              <button class="btn-ghost danger" onclick="deleteArticle('${a.id}')">Delete</button>
+            </div>
+          </div>`).join('');
+      } catch (e) { document.getElementById('kbList').textContent = 'Could not load articles.'; }
+    }
+
+    async function saveArticle() {
+      const title = document.getElementById('kbTitle').value.trim();
+      const content = document.getElementById('kbContent').value.trim();
+      const category = document.getElementById('kbCategory').value.trim() || 'general';
+      if (!title || !content) { alert('Title and content are required.'); return; }
+      const url = editingId ? '/api/portal/kb/' + editingId : '/api/portal/kb';
+      const method = editingId ? 'PUT' : 'POST';
+      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content, category }) });
+      if (r.ok) { cancelEdit(); loadArticles(); }
+      else { const e = await r.json().catch(() => ({})); alert(e.error || 'Could not save.'); }
+    }
+
+    function editArticle(id) {
+      const a = articles.find(x => x.id === id); if (!a) return;
+      editingId = id;
+      document.getElementById('kbTitle').value = a.title;
+      document.getElementById('kbCategory').value = a.category || '';
+      document.getElementById('kbContent').value = a.content;
+      document.getElementById('cancelEdit').style.display = 'inline-block';
+      document.getElementById('kbForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function cancelEdit() {
+      editingId = null;
+      document.getElementById('kbTitle').value = '';
+      document.getElementById('kbCategory').value = '';
+      document.getElementById('kbContent').value = '';
+      document.getElementById('cancelEdit').style.display = 'none';
+    }
+
+    async function deleteArticle(id) {
+      if (!confirm('Delete this article?')) return;
+      try {
+        const r = await fetch('/api/portal/kb/' + id, { method: 'DELETE' });
+        if (r.ok) { loadArticles(); } else { alert('Could not delete the article.'); }
+      } catch (e) { alert('Network error deleting the article.'); }
+    }
+
+    async function saveSettings() {
+      const body = {
+        business_name: document.getElementById('setBusinessName').value,
+        bot_name: document.getElementById('setBotName').value,
+        welcome_message: document.getElementById('setWelcome').value,
+        primary_color: document.getElementById('setColor').value,
+        allowed_domains: document.getElementById('setDomains').value,
+      };
+      const status = document.getElementById('setStatus');
+      status.textContent = 'Saving...';
+      try {
+        const r = await fetch('/api/portal/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const e = r.ok ? null : await r.json().catch(() => ({}));
+        status.textContent = r.ok ? 'Saved.' : (e.error || 'Could not save.');
+      } catch (err) {
+        status.textContent = 'Network error.';
+      }
+      setTimeout(() => { status.textContent = ''; }, 2500);
+    }
+
+    loadAnalytics();
+    loadArticles();
   </script>
 </body>
 </html>

@@ -22,14 +22,9 @@ widget_bp = Blueprint("widget", __name__)
 
 
 def _get_client_by_key(api_key: str) -> Client | None:
-    db = SessionLocal()
-    try:
-        return db.query(Client).filter(
-            Client.api_key == api_key,
-            Client.is_active == True,
-        ).first()
-    finally:
-        db.close()
+    # Delegates to the single shared resolver (active clients only for the widget).
+    from core.client_manager import get_client_by_api_key
+    return get_client_by_api_key(api_key, active_only=True)
 
 
 def _cors_headers(client: Client) -> dict:
