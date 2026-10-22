@@ -2,7 +2,7 @@
 end through the real widget endpoint, lead alerts, the portal Leads/Leasing
 APIs, trial + Stripe billing, and rate limits.
 
-Flask test client on an isolated SQLite DB. Gemini, SMTP, Twilio, and Stripe
+Flask test client on an isolated SQLite DB. The LLM, SMTP, Twilio, and Stripe
 are all stubbed. Run: python tests/test_leasing_mvp.py
 """
 import os, sys, types, json
@@ -14,42 +14,33 @@ os.environ["STRIPE_SECRET_KEY"] = "sk_test_dummy"
 os.environ["STRIPE_PRICE_STARTER"] = "price_starter_123"
 os.environ["STRIPE_PRICE_PROFESSIONAL"] = "price_pro_456"
 
-# ── Gemini stub, routed by system prompt ────────────────────────────────────
+# ── LLM stub, routed by system prompt ────────────────────────────────────
 STUB = {
     "triage_intent": "general", "triage_route": "resolver", "triage_raises": False,
     "extract": {}, "resolver": "Resolver answer.", "resolver_prompts": [],
 }
-_g = types.ModuleType("google"); _ga = types.ModuleType("google.generativeai")
-_ga.configure = lambda **k: None
-class _StubModel:
-    def __init__(self, model_name=None, system_instruction="", **k):
-        self.si = system_instruction or ""
-    def generate_content(self, prompt, *a, **k):
-        if "triage classifier" in self.si:
-            if STUB["triage_raises"]:
-                raise RuntimeError("gemini down")
-            return types.SimpleNamespace(text=json.dumps({
-                "intent": STUB["triage_intent"], "confidence": 0.9,
-                "route": STUB["triage_route"], "escalation_reason": None}))
-        if "extract answers" in self.si:
-            ext = STUB["extract"]
-            body = ext(prompt) if callable(ext) else ext
-            return types.SimpleNamespace(text=json.dumps({
-                "answers": body.get("answers", {}), "asked_question": body.get("asked_question", False),
-                "needs_human": body.get("needs_human", False), "declined": body.get("declined", False)}))
-        if "escalation handler" in self.si:
-            return types.SimpleNamespace(text=json.dumps({
-                "action": "human_handoff", "message_to_user": "A team member will reach out.",
-                "alert_client": False, "reason": "stub"}))
-        return types.SimpleNamespace(text="stub summary")
-    def start_chat(self, *a, **k):
-        si = self.si
-        def send(msg, *a, **k):
-            STUB["resolver_prompts"].append(si)
-            return types.SimpleNamespace(text=STUB["resolver"])
-        return types.SimpleNamespace(send_message=send)
-_ga.GenerativeModel = _StubModel
-sys.modules["google"] = _g; sys.modules["google.generativeai"] = _ga
+import core.llm as llm
+def _stub_generate(prompt, system=None, **kw):
+    si = system or ""
+    if "triage classifier" in si:
+        if STUB["triage_raises"]:
+            raise RuntimeError("llm down")
+        return json.dumps({"intent": STUB["triage_intent"], "confidence": 0.9,
+                           "route": STUB["triage_route"], "escalation_reason": None})
+    if "extract answers" in si:
+        ext = STUB["extract"]
+        body = ext(prompt) if callable(ext) else ext
+        return json.dumps({"answers": body.get("answers", {}), "asked_question": body.get("asked_question", False),
+                           "needs_human": body.get("needs_human", False), "declined": body.get("declined", False)})
+    if "escalation handler" in si:
+        return json.dumps({"action": "human_handoff", "message_to_user": "A team member will reach out.",
+                           "alert_client": False, "reason": "stub"})
+    return "stub summary"
+def _stub_chat(system, history, message, **kw):
+    STUB["resolver_prompts"].append("\n\n".join(system) if isinstance(system, list) else system)
+    return STUB["resolver"]
+llm.generate = _stub_generate
+llm.chat = _stub_chat
 
 # ── Isolated SQLite ─────────────────────────────────────────────────────────
 from sqlalchemy import create_engine

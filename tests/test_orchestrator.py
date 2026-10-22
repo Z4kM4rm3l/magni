@@ -1,5 +1,5 @@
 """
-Standalone orchestrator test — no Flask, no Gemini calls.
+Standalone orchestrator test — no Flask, no LLM calls.
 Patches agents with stubs to test routing logic only.
 Run: python tests/test_orchestrator.py
 """

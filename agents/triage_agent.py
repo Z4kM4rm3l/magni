@@ -1,6 +1,6 @@
 import os
 import json
-import google.generativeai as genai
+from core import llm
 from agents import BaseAgent
 from core.utils import logger
 
@@ -31,23 +31,11 @@ class TriageAgent(BaseAgent):
         message = payload.get("message", "")
         history_summary = payload.get("history_summary", "No prior context.")
 
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
-            system_instruction=TRIAGE_PROMPT
-        )
-
         prompt = f"History summary:\n{history_summary}\n\nCurrent message: {message}"
 
         try:
-            response = model.generate_content(prompt)
-            text = response.text.strip()
-            # Strip markdown fences if model wraps output
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-                text = text.strip()
+            text = llm.generate(prompt, TRIAGE_PROMPT, fast=True, thinking="minimal", json_mode=True)
+            text = llm.strip_fences(text)
 
             result = json.loads(text)
 

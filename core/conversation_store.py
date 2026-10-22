@@ -146,8 +146,7 @@ def evaluate_resolution_with_ai(last_user: str, last_agent: str) -> bool:
     """Asymmetric LLM fallback: True only if the sentiment is clearly positive;
     defaults to False on any uncertainty or failure."""
     try:
-        import google.generativeai as genai
-        model = genai.GenerativeModel(model_name="gemini-2.5-flash")
+        from core import llm
         prompt = f"""Analyze this final exchange between a customer support AI and a user.
 Determine if the user's issue was successfully RESOLVED by the agent's last answer.
 
@@ -156,8 +155,7 @@ User Response: "{last_user}"
 
 Respond with exactly one word: YES or NO. If unsure, respond NO.
 Resolution:"""
-        response = model.generate_content(prompt)
-        verdict = response.text.strip().upper()
+        verdict = llm.generate(prompt, fast=True, thinking="minimal").upper()
         logger.info(f"AI Resolution analysis verdict: {verdict}")
         return "YES" in verdict
     except Exception as e:

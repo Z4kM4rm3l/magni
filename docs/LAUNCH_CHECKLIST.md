@@ -19,9 +19,13 @@ Everything below is one-time setup. Do it in Stripe **test mode** first, run the
 
 | Variable | Value |
 |---|---|
-| `SECRET_KEY` | long random string (already set) |
-| `DATABASE_URL` | Railway Postgres (already set) |
-| `GEMINI_API_KEY` | already set |
+| `SECRET_KEY` | long random string: `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (reference to the Railway Postgres service) |
+| `ANTHROPIC_API_KEY` | Claude API key from platform.claude.com, created inside a dedicated Magni workspace with a monthly spend limit (see `docs/BILLING_PROTECTION.md`, layer 4) |
+| `CLAUDE_MODEL` | optional; defaults to `claude-haiku-5-5`. Change it here to move models, no code change needed |
+| `CLAUDE_FAST_MODEL` | optional; model for quick routing/extraction calls (defaults to `CLAUDE_MODEL`) |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | operator login; the password must be the hash from `python scripts/hash_admin_password.py` |
+| `ALLOWED_ORIGINS` | same as `PUBLIC_BASE_URL` |
 | `PUBLIC_BASE_URL` | `https://YOUR-DOMAIN` (no trailing slash). Used for Stripe return links and the "see all leads" link in alerts |
 | `STRIPE_SECRET_KEY` | `sk_test_...` then `sk_live_...` |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_...` from step 1.3 |
@@ -46,13 +50,20 @@ If you restore an old database that predates Alembic, run `alembic stamp 0001` o
 
 ## 5. Partial-lead sweep (scheduled job)
 
-Prospects who give a phone or email and then stop replying get sent to the owner after 20 minutes. Live chat traffic triggers this about once a minute, but add a cron service so it also runs overnight:
+Prospects who give a phone or email and then stop replying get sent to the owner after 20 minutes. Live chat traffic triggers this about once a minute, but add a cron service so it also runs overnight. Railway no longer lets new services use `railway.json` files, so set this up in the dashboard:
 
-- New Railway service from the same repo
-- Config-as-code path: `railway.sweep.json` (runs `python scripts/sweep_leads.py` every 10 minutes)
-- Same env vars as the web service
+- **+ New → GitHub repo → magni** (a second service, e.g. `lead-sweep`)
+- **Settings → Start Command:** `python scripts/sweep_leads.py`
+- **Settings → Cron Schedule:** `*/10 * * * *` (UTC; Railway's minimum is 5 minutes)
+- **Variables:** `DATABASE_URL`, `MAGNI_SMTP_FROM`, `MAGNI_SMTP_PASSWORD`, `PUBLIC_BASE_URL` (and the Twilio ones once SMS is approved)
+
+Optional: a daily cron service for `python scripts/reset_monthly_usage.py` (e.g. `0 9 * * *`) with `DATABASE_URL` and `STRIPE_SECRET_KEY`, which resets monthly message counts.
+
+The web service's **Start Command** should be `python app.py`.
 
 ## 6. Smoke test (test mode)
+
+0. Optional live model check from your Codespace with `ANTHROPIC_API_KEY` set: `python tests/test_triage_agent.py` and `python tests/test_resolver_agent.py` call the real Claude API.
 
 1. Sign up at `/signup`. The portal should say **Free trial: 14 days left**.
 2. **Leasing assistant** card: set Business type to *Long-term rentals*, add posted criteria, an application link, and your own email/phone for alerts. Save.

@@ -1,21 +1,17 @@
 """Standalone tenant-ownership tests for the conversation store and the
 in-memory conversation manager. No Postgres required (isolated SQLite) and no
-Gemini calls. Run: python tests/test_conversation_ownership.py
+LLM calls. Run: python tests/test_conversation_ownership.py
 """
 import os, sys, types
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Stub Gemini so importing the store (and its AI resolution fallback) needs no network.
-_g = types.ModuleType("google"); _ga = types.ModuleType("google.generativeai")
-_ga.configure = lambda **k: None
-class _StubModel:
-    def __init__(self, *a, **k): pass
-    def generate_content(self, *a, **k): return types.SimpleNamespace(text="NO")
-_ga.GenerativeModel = _StubModel
-sys.modules["google"] = _g; sys.modules["google.generativeai"] = _ga
-
 # Bind an isolated in-memory SQLite into core.db BEFORE importing the store.
+# Stub the LLM at the wrapper (core.llm) so no SDK or network is needed.
+import core.llm as _llm
+_llm.generate = lambda *a, **k: "NO"
+_llm.chat = lambda *a, **k: "ok"
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool

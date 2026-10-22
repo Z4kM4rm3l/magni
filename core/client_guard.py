@@ -2,7 +2,7 @@
 core/client_guard.py
 
 Multi-layer billing protection for Magni.
-Four independent safeguards — ALL must pass before Gemini is called.
+Four independent safeguards — ALL must pass before the LLM is called.
 
 Layer 1: Atomic DB increment with SELECT FOR UPDATE (race condition proof)
 Layer 2: Hard fail-closed on any DB error (no silent bypass)
@@ -26,7 +26,7 @@ VISITOR_UNAVAILABLE = (
 )
 
 # ── GLOBAL SAFETY CAP ────────────────────────────────────────────────────────
-# Maximum Gemini API calls across ALL clients in a single day.
+# Maximum LLM API calls across ALL clients in a single day.
 # At ~$0.0001 per call this caps your daily exposure at roughly $1.
 # Change this as your client base grows.
 GLOBAL_DAILY_CAP = 10_000
@@ -51,7 +51,7 @@ def _check_global_cap() -> Tuple[bool, str]:
     if _global_usage["count"] >= GLOBAL_DAILY_CAP:
         logger.critical(
             f"GLOBAL DAILY CAP HIT: {_global_usage['count']} requests today. "
-            f"All Gemini calls are blocked until midnight UTC."
+            f"All LLM calls are blocked until midnight UTC."
         )
         return False, "global_cap_exceeded"
 

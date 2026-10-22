@@ -1,20 +1,15 @@
 """Standalone portal isolation + validation + CSRF tests (Flask test client on an
-isolated SQLite DB, no Postgres, no Gemini). Run: python tests/test_portal_isolation.py
+isolated SQLite DB, no Postgres, no LLM). Run: python tests/test_portal_isolation.py
 """
 import os, sys, types
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 os.environ.setdefault("SECRET_KEY", "test-secret")
 
-# Stub Gemini.
-_g = types.ModuleType("google"); _ga = types.ModuleType("google.generativeai")
-_ga.configure = lambda **k: None
-class _StubModel:
-    def __init__(self, *a, **k): pass
-    def start_chat(self, *a, **k): return types.SimpleNamespace(send_message=lambda *a, **k: types.SimpleNamespace(text="ok"))
-    def generate_content(self, *a, **k): return types.SimpleNamespace(text="stub summary")
-_ga.GenerativeModel = _StubModel
-sys.modules["google"] = _g; sys.modules["google.generativeai"] = _ga
+# Stub the LLM at the wrapper (core.llm) so no SDK or network is needed.
+import core.llm as _llm
+_llm.generate = lambda *a, **k: "stub summary"
+_llm.chat = lambda *a, **k: "ok"
 
 # Isolated SQLite bound into core.db; neutralize init_db so importing app does not run Alembic.
 from sqlalchemy import create_engine
