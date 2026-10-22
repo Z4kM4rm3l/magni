@@ -15,8 +15,15 @@ from datetime import date
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from core.models import Client
-from core.billing_policies import TIER_LIMITS
+from core.billing_policies import TIER_LIMITS, billing_entitlement
 from core.utils import logger
+
+# Shown to the website visitor whenever the business's assistant can't answer
+# (suspended, trial over, canceled, monthly cap). Deliberately neutral.
+VISITOR_UNAVAILABLE = (
+    "Our chat assistant is unavailable right now. "
+    "Please contact us directly and we'll be glad to help."
+)
 
 # ── GLOBAL SAFETY CAP ────────────────────────────────────────────────────────
 # Maximum Gemini API calls across ALL clients in a single day.
@@ -83,7 +90,15 @@ def track_and_validate_request(
             return False, "Invalid API key.", None
 
         if not client.is_active:
-            return False, "Account inactive. Please check your subscription.", None
+            return False, VISITOR_UNAVAILABLE, None
+
+        # Trial / subscription gate. The message goes to the business's website
+        # visitor, so it never mentions trials or billing; the owner sees the
+        # real state in their portal.
+        entitled, state = billing_entitlement(client)
+        if not entitled:
+            logger.warning(f"client_guard: client {client.id[:8]} blocked, billing state={state}")
+            return False, VISITOR_UNAVAILABLE, None
 
         # Resolve limit from tier or explicit override
         tier = client.tier or "starter"
@@ -96,12 +111,11 @@ def track_and_validate_request(
 
         # -1 sentinel = unlimited (Enterprise custom plan)
         if limit != -1 and used >= limit:
-            return (
-                False,
-                f"Monthly conversation limit reached ({used}/{limit}) "
-                f"for tier '{tier}'. Please upgrade your plan.",
-                None,
+            logger.warning(
+                f"client_guard: client {client.id[:8]} hit monthly limit "
+                f"({used}/{limit}, tier '{tier}')"
             )
+            return False, VISITOR_UNAVAILABLE, None
 
         # Layer 3: Check global cap BEFORE incrementing individual counter
         global_ok, global_reason = _check_global_cap()

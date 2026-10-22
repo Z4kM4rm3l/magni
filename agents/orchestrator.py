@@ -6,6 +6,8 @@ from core.utils import logger
 import agents.triage_agent as _triage_mod
 import agents.resolver_agent as _resolver_mod
 import agents.escalation_agent as _escalation_mod
+from core import lead_flow as _lead_flow
+from core.leasing import check_output, detect_accommodation, looks_like_leasing
 
 
 def _summarize_history(history: list) -> str:
@@ -87,15 +89,65 @@ class Orchestrator:
         # ── HISTORY SUMMARIZATION ────────────────────────────────────────────
         history_summary = _summarize_history(history)
 
+        # ── LEASING ASSISTANT (rental clients only) ──────────────────────────
+        try:
+            _lead_flow.maybe_sweep()
+        except Exception as e:  # never let the sweep affect a chat reply
+            logger.error(f"lead sweep error: {e}")
+        ctx = _lead_flow.load_client_context(resolved_client_id)
+        rental = _lead_flow.is_rental(ctx)
+        vertical = ctx["vertical"] if ctx else "general"
+
+        def finish(result: dict) -> dict:
+            result.setdefault("session_id", session_id)
+            result["client_id"] = resolved_client_id
+            # Intake replies are already filtered (side answers) or fixed text.
+            if rental and result.get("route") != "leasing":
+                safe, flagged = check_output(result.get("response", ""))
+                if flagged:
+                    logger.warning(
+                        f"Fair Housing filter replaced a reply (client={str(resolved_client_id)[:8]} "
+                        f"session={session_id[:8]} flagged={flagged})"
+                    )
+                    result["response"] = safe
+            return result
+
+        forced_escalation = None
+        if rental:
+            lead_result = _lead_flow.continue_turn(ctx, session_id, message, history, history_summary)
+            if lead_result and lead_result.get("handoff"):
+                forced_escalation = "Prospect asked for a person or raised a concern during the rental intake."
+            elif lead_result:
+                return finish(lead_result)
+            elif detect_accommodation(message):
+                # Never let the general assistant quote pet rules at an assistance-animal request.
+                lead_result = _lead_flow.start(ctx, session_id, message, history, history_summary)
+                if lead_result:
+                    return finish(lead_result)
+
         # ── TRIAGE ───────────────────────────────────────────────────────────
-        triage_result = _triage_mod.triage_agent.run({
-            "message": message,
-            "history_summary": history_summary,
-        })
+        if forced_escalation:
+            triage_result = {"intent": "leasing", "route": "escalation",
+                             "escalation_reason": forced_escalation, "error": False}
+        else:
+            triage_result = _triage_mod.triage_agent.run({
+                "message": message,
+                "history_summary": history_summary,
+            })
 
         intent = triage_result["intent"]
         route = triage_result["route"]
         escalation_reason = triage_result.get("escalation_reason")
+
+        if rental and route != "escalation" and (
+            intent == "leasing"
+            or (triage_result.get("error") and looks_like_leasing(message))
+        ):
+            lead_result = _lead_flow.start(ctx, session_id, message, history, history_summary)
+            if lead_result:
+                return finish(lead_result)
+        if intent == "leasing" and not rental:
+            intent = "product"
 
         logger.info(
             f"Orchestrator: session={session_id[:8]} "
@@ -111,15 +163,14 @@ class Orchestrator:
                 "escalation_reason": escalation_reason or "Triage directed escalation.",
             })
             _maybe_alert(esc_result, client_email, client_name, history, session_id)
-            return {
+            return finish({
                 "response": esc_result["message_to_user"],
                 "intent": intent,
                 "session_id": session_id,
                 "route": "escalation",
                 "escalation_action": esc_result["action"],
                 "alert_client": esc_result["alert_client"],
-                "client_id": resolved_client_id,
-            }
+            })
 
         # ── RESOLVER ─────────────────────────────────────────────────────────
         res_result = _resolver_mod.resolver_agent.run({
@@ -128,6 +179,7 @@ class Orchestrator:
             "history_summary": history_summary,
             "history": history,
             "client_id": resolved_client_id,
+            "vertical": vertical,
         })
 
         # ── ESCALATION — resolver-directed ───────────────────────────────────
@@ -139,23 +191,21 @@ class Orchestrator:
                 "escalation_reason": "Resolver determined it could not resolve this without human help.",
             })
             _maybe_alert(esc_result, client_email, client_name, history, session_id)
-            return {
+            return finish({
                 "response": res_result["response_text"],
                 "intent": intent,
                 "session_id": session_id,
                 "route": "resolver_escalated",
                 "escalation_action": esc_result["action"],
                 "alert_client": esc_result["alert_client"],
-                "client_id": resolved_client_id,
-            }
+            })
 
-        return {
+        return finish({
             "response": res_result["response_text"],
             "intent": intent,
             "session_id": session_id,
             "route": "resolver",
-            "client_id": resolved_client_id,
-        }
+        })
 
 
 orchestrator = Orchestrator()

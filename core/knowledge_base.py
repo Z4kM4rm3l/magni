@@ -219,20 +219,46 @@ def search_kb(client_id: str, query: str, max_results: int = 3) -> list:
     return [_to_dict(a) for _, a in scored[:max_results]]
 
 
+# Small knowledge bases (most small businesses) are sent to the model whole,
+# so a question matches its answer even when they share no keywords
+# ("can I get my money back?" vs an article titled "Refund Policy").
+# Larger ones fall back to keyword retrieval.
+WHOLE_KB_CHAR_BUDGET = 24000
+KEYWORD_RESULTS = 5
+KEYWORD_ARTICLE_CHARS = 1500
+
+
 def get_kb_context(client_id: str, query: str) -> str:
     """
-    Build a context string from this client's relevant KB articles for injection
-    into Magni's prompt. Returns empty string if no relevant articles found.
+    Build the knowledge-base block injected into the resolver prompt.
+    Returns an empty string if the client has no articles.
     """
-    relevant = search_kb(client_id, query)
-    if not relevant:
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(KnowledgeArticle)
+            .filter(KnowledgeArticle.client_id == client_id)
+            .order_by(KnowledgeArticle.updated_at.desc())
+            .all()
+        )
+        articles = [(a.title, a.content) for a in rows]
+    finally:
+        db.close()
+    if not articles:
         return ""
 
-    context_parts = ["KNOWLEDGE BASE — Use this information to answer accurately:"]
-    for article in relevant:
-        context_parts.append(f"\n[{article['title']}]\n{article['content'][:800]}")
+    header = ("KNOWLEDGE BASE (the only source for facts about this business; "
+              "if the answer isn't here, say the team will confirm):")
+    total = sum(len(t) + len(c) for t, c in articles)
+    if total <= WHOLE_KB_CHAR_BUDGET:
+        parts = [header] + [f"\n[{t}]\n{c}" for t, c in articles]
+        return "\n".join(parts)
 
-    return "\n".join(context_parts)
+    relevant = search_kb(client_id, query, max_results=KEYWORD_RESULTS)
+    if not relevant:
+        return header + "\n(No article matched this question.)"
+    parts = [header] + [f"\n[{a['title']}]\n{a['content'][:KEYWORD_ARTICLE_CHARS]}" for a in relevant]
+    return "\n".join(parts)
 
 
 def get_categories(client_id: str) -> list:

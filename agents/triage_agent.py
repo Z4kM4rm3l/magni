@@ -6,7 +6,11 @@ from core.utils import logger
 
 TRIAGE_PROMPT = """You are a triage classifier for a customer service AI. Your only job is to analyze a customer message and output a routing decision as JSON.
 
-Intents: billing, technical, product, orders, feedback, general
+Intents: billing, technical, product, orders, feedback, leasing, general
+
+"leasing" = a PROSPECT interested in renting or booking: availability, pricing of a
+rental, touring/showings, applying, move-in, reserving or booking a stay. A current
+resident asking about paying rent, maintenance, or their own lease is NOT leasing.
 Routes:
   - "resolver" — standard questions the AI can answer
   - "escalation" — situations requiring human intervention or sensitive handling
@@ -53,7 +57,7 @@ class TriageAgent(BaseAgent):
             route = result.get("route", "resolver")
             escalation_reason = result.get("escalation_reason", None)
 
-            if intent not in ("billing", "technical", "product", "orders", "feedback", "general"):
+            if intent not in ("billing", "technical", "product", "orders", "feedback", "leasing", "general"):
                 intent = "general"
             if route not in ("resolver", "escalation"):
                 route = "resolver"
@@ -64,6 +68,7 @@ class TriageAgent(BaseAgent):
                 "confidence": confidence,
                 "route": route,
                 "escalation_reason": escalation_reason,
+                "error": False,
             }
 
         except Exception as e:
@@ -73,6 +78,7 @@ class TriageAgent(BaseAgent):
                 "confidence": 0.5,
                 "route": "resolver",
                 "escalation_reason": None,
+                "error": True,
             }
 
 

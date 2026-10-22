@@ -8,10 +8,11 @@ data/clients.json is left on disk as a backup and is no longer written to.
 """
 import uuid
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from core.db import SessionLocal
 from core.models import Client
-from core.billing_policies import TIER_LIMITS
+from core.billing_policies import TIER_LIMITS, PLAN_PRICES, billing_state, trial_days_left
+from core.leasing import normalize_lead_config, VERTICALS
 from core.utils import logger
 
 # Feature flags per tier — kept here for admin UI display logic.
@@ -69,6 +70,15 @@ def _client_to_dict(c: Client) -> dict:
         "custom_identity":    features["custom_identity"],
         "white_label":        features["white_label"],
         "analytics":          features["analytics"],
+        # Trial / subscription
+        "billing_state":       billing_state(c),
+        "trial_days_left":     trial_days_left(c),
+        "subscription_status": c.subscription_status or "",
+        "has_billing_account": bool(c.stripe_customer_id),
+        # Leasing assistant
+        "vertical":            c.vertical or "general",
+        "vertical_label":      VERTICALS.get(c.vertical or "general", "General business"),
+        "lead_config":         normalize_lead_config(c.lead_config, c.vertical or "general"),
         # Timestamps
         "created_at": c.created_at.timestamp() if c.created_at else None,
         "updated_at": None,  # not tracked on the SQL model; kept for shape parity
@@ -86,7 +96,10 @@ def create_client(
     welcome_message: str = "Hi! How can I help you today?",
     allowed_domains: list | None = None,
     notes: str = "",
+    trial_days: int | None = None,
 ) -> dict:
+    """trial_days starts a self-serve free trial; None means an operator-managed
+    account with no trial clock (existing behavior)."""
     features = TIER_FEATURES.get(tier, TIER_FEATURES["starter"])
     db = SessionLocal()
     try:
@@ -105,6 +118,8 @@ def create_client(
             monthly_limit=TIER_LIMITS.get(tier, TIER_LIMITS["starter"]),
             monthly_used=0,
             created_at=datetime.now(timezone.utc),
+            trial_ends_at=(datetime.now(timezone.utc) + timedelta(days=trial_days)) if trial_days else None,
+            vertical="general",
         )
         db.add(client)
         db.commit()
@@ -172,6 +187,8 @@ def update_client(client_id: str, **kwargs) -> dict | None:
             "primary_color":  "primary_color",
             "welcome_message": "welcome_message",
             "allowed_domains": "allowed_domains",
+            "vertical":       "vertical",
+            "lead_config":    "lead_config",
         }
         for kwarg_key, col_name in field_map.items():
             if kwarg_key in kwargs:
@@ -249,8 +266,11 @@ def get_client_stats() -> dict:
         active    = [c for c in all_clients if c.is_active]
         suspended = [c for c in all_clients if not c.is_active]
 
-        mrr_map = {"starter": 79, "professional": 249, "enterprise": 599}
-        mrr = sum(mrr_map.get(c.tier, 0) for c in active)
+        # Paying via Stripe, or operator-managed (billed outside Magni). Trials,
+        # ended trials, cancellations, and the demo account don't count.
+        paying = [c for c in active
+                  if c.id != "demo" and billing_state(c) in ("active", "past_due", "managed")]
+        mrr = sum(PLAN_PRICES.get(c.tier, 0) for c in paying)
 
         return {
             "total":     len(all_clients),

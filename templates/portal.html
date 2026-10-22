@@ -53,9 +53,110 @@
   </header>
   <div class="container">
     <h1>Welcome, {{ client.business_name }}</h1>
-    <p class="sub">Your AI support agent is ready. Add it to your site with the snippet below.</p>
+    <p class="sub">Your AI assistant is ready. Add it to your site with the snippet below.</p>
 
-    <div class="card">
+    <nav class="jump">
+      <a href="#billing">Plan</a>
+      <a href="#leads" class="rental-only" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>Leads</a>
+      <a href="#leasing">Leasing assistant</a>
+      <a href="#install">Install</a>
+      <a href="#kb">Knowledge base</a>
+      <a href="#settings">Appearance</a>
+    </nav>
+
+    {% set st = client.billing_state %}
+    <div class="card billing {{ 'warn' if st in ['trial_ended','canceled','past_due'] else '' }}" id="billing">
+      {% if billing_flash == 'success' %}
+        <div class="flash ok">Thanks! Your subscription is being activated. This can take a few seconds to show here.</div>
+      {% elif billing_flash == 'cancel' %}
+        <div class="flash">Checkout was canceled. No charge was made.</div>
+      {% endif %}
+      {% if st == 'trial' %}
+        <h2>Free trial: {{ client.trial_days_left }} day{{ '' if client.trial_days_left == 1 else 's' }} left</h2>
+        <p>Your assistant is live. Pick a plan any time to keep it running after the trial. You won't be charged until the trial ends.</p>
+      {% elif st == 'trial_ended' %}
+        <h2>Your free trial has ended</h2>
+        <p>Your assistant is paused on your website. Choose a plan to turn it back on right away.</p>
+      {% elif st == 'past_due' %}
+        <h2>Payment issue</h2>
+        <p>We couldn't process your last payment. Stripe will retry automatically; update your card to avoid any interruption.</p>
+      {% elif st == 'canceled' %}
+        <h2>Your subscription has ended</h2>
+        <p>Your assistant is paused on your website. Choose a plan to turn it back on.</p>
+      {% elif st == 'active' %}
+        <h2>{{ plans[client.tier].name if client.tier in plans else client.tier|capitalize }} plan · Active</h2>
+        <p>Your assistant is live. Change plans, update your card, or download invoices any time.</p>
+      {% else %}
+        <h2>{{ client.tier|capitalize }} plan</h2>
+        <p>Your billing is handled directly with Magni. Reach out with any questions.</p>
+      {% endif %}
+      {% if st in ['trial', 'trial_ended', 'canceled'] %}
+        <div class="plans">
+          {% for key, p in plans.items() %}
+            <div class="plan">
+              <div class="plan-name">{{ p.name }}</div>
+              <div class="plan-price">${{ p.price }}<span>/mo</span></div>
+              <div class="plan-blurb">{{ p.blurb }}</div>
+              <button class="btn-primary" onclick="startCheckout('{{ key }}', this)">Choose {{ p.name }}</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if client.has_billing_account and st != 'managed' %}
+        <div class="row" style="margin-top:0.9rem"><button class="btn-ghost" onclick="manageBilling(this)">Manage billing</button></div>
+      {% endif %}
+      <div class="meta">
+        <div><span class="k">Usage:</span> {{ client.conversations_used }} / {{ client.conversation_limit }} messages this month</div>
+      </div>
+      <div id="billingStatus" class="set-status"></div>
+    </div>
+
+    <div class="card rental-only" id="leads" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Leads</h2>
+        <a class="btn-ghost" href="/api/portal/leads.csv">Export CSV</a>
+      </div>
+      <p style="margin-top:0.4rem">Prospects your assistant talked to. New leads are emailed (and texted, if you add a phone below) the moment they come in. This list refreshes on its own.</p>
+      <div id="leadList" class="lead-list"><div class="empty">Loading...</div></div>
+    </div>
+
+    <div class="card" id="leasing">
+      <h2>Leasing assistant</h2>
+      <p>Turn this on and your assistant will pre-qualify renters or guests around the clock, then send you each lead instantly.</p>
+      <div class="kb-form">
+        <label class="fld">Business type
+          <select id="lsVertical" onchange="renderLeasing()">
+            {% for k, label in verticals.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}
+          </select>
+        </label>
+        <div id="lsRental" style="display:none">
+          <div class="fld">Questions to ask (fixed wording, same order for every prospect)</div>
+          <div id="lsQuestions" class="q-list"></div>
+          <label class="fld lt-only">Posted rental criteria (optional, shown to everyone who's asked)
+            <textarea id="lsCriteria" rows="2" maxlength="600" placeholder="e.g. Gross income of 3x the monthly rent, no evictions in the past 5 years, $50 application fee."></textarea>
+          </label>
+          <label class="fld">Application or booking link (optional)
+            <input id="lsApp" type="url" placeholder="https://...">
+          </label>
+          <label class="fld">Tour / call scheduling link (optional, e.g. Calendly)
+            <input id="lsBook" type="url" placeholder="https://...">
+          </label>
+          <label class="fld">Send lead alerts to this email
+            <input id="lsEmail" type="email" placeholder="">
+          </label>
+          <label class="fld">Also text lead alerts to (US mobile, optional)
+            <input id="lsPhone" type="tel" placeholder="(239) 555-0123">
+          </label>
+          <p class="fine">Built with Fair Housing in mind: questions use fixed wording and are asked the same way to everyone, the assistant only collects answers (it never screens, scores, or turns anyone away), assistance-animal and accommodation requests are flagged for you personally, and replies that describe who a home "suits" are blocked. This isn't legal advice, so have your own counsel review your criteria.</p>
+        </div>
+        <div class="row">
+          <button class="btn-primary" onclick="saveLeasing(this)">Save leasing settings</button>
+          <span id="lsStatus" class="set-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="install">
       <h2>Embed on your website</h2>
       <p>Paste this just before the closing &lt;/body&gt; tag on any page.</p>
       <div class="row">
@@ -83,9 +184,10 @@
       <div class="kpis" id="kpis">Loading...</div>
     </div>
 
-    <div class="card">
+    <div class="card" id="kb">
       <h2>Knowledge base</h2>
-      <p>Add the FAQs, policies, and docs your assistant should answer from. Changes take effect immediately.</p>
+      <p>Add the FAQs, policies, and docs your assistant should answer from. Changes take effect immediately. The assistant only states prices, fees, availability, and policies that appear here.</p>
+      <div id="kbSuggest" class="suggest"></div>
       <div id="kbForm" class="kb-form">
         <input id="kbTitle" type="text" placeholder="Title">
         <input id="kbCategory" type="text" placeholder="Category (optional, e.g. billing)">
@@ -98,8 +200,8 @@
       <div id="kbList" class="kb-list"></div>
     </div>
 
-    <div class="card">
-      <h2>Settings</h2>
+    <div class="card" id="settings">
+      <h2>Appearance</h2>
       <p>Customize how your assistant looks and behaves.</p>
       <div class="kb-form">
         <label class="fld">Business name
@@ -143,6 +245,36 @@
       .kb-cat { font-size:0.75rem; color:var(--dim); }
       .kb-actions { display:flex; gap:0.5rem; }
       .empty { color:var(--dim); font-size:0.88rem; padding:1rem 0; }
+      .jump { display:flex; flex-wrap:wrap; gap:0.4rem 1rem; margin:-1rem 0 1.5rem; font-size:0.85rem; }
+      .jump a { color:var(--dim); text-decoration:none; } .jump a:hover { color:var(--accent); }
+      .card.warn { border-color:#b45309; }
+      .flash { font-size:0.85rem; padding:0.6rem 0.8rem; border-radius:8px; background:#121216; border:1px solid var(--border); margin-bottom:0.9rem; color:var(--dim); }
+      .flash.ok { color:#86efac; border-color:#14532d; }
+      .plans { display:flex; flex-wrap:wrap; gap:0.9rem; }
+      .plan { flex:1; min-width:200px; background:#121216; border:1px solid var(--border); border-radius:10px; padding:1rem; }
+      .plan-name { font-weight:700; } .plan-price { font-size:1.6rem; font-weight:700; color:var(--accent); margin:0.2rem 0; }
+      .plan-price span { font-size:0.85rem; color:var(--dim); font-weight:400; }
+      .plan-blurb { font-size:0.8rem; color:var(--dim); margin-bottom:0.8rem; }
+      .kb-form select { width:100%; margin-bottom:0.6rem; padding:0.6rem 0.7rem; border-radius:8px; border:1px solid var(--border); background:#121216; color:var(--text); font-size:0.9rem; }
+      .q-list { margin:0.3rem 0 1rem; }
+      .q-item { display:flex; gap:0.6rem; align-items:flex-start; padding:0.45rem 0; border-top:1px solid var(--border); font-size:0.85rem; }
+      .q-item input { width:auto; margin:0.2rem 0 0; }
+      .q-item .q-text { color:var(--dim); font-size:0.8rem; }
+      .fine { font-size:0.78rem !important; color:var(--dim); line-height:1.5; }
+      .suggest { display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.9rem; }
+      .chip { font-size:0.78rem; padding:0.35rem 0.65rem; border-radius:999px; border:1px dashed var(--border); color:var(--dim); background:transparent; cursor:pointer; }
+      .chip:hover { border-color:var(--accent); color:var(--accent); }
+      .lead { border-top:1px solid var(--border); padding:0.75rem 0; }
+      .lead-head { display:flex; justify-content:space-between; align-items:center; gap:0.6rem; cursor:pointer; }
+      .lead-name { font-weight:600; font-size:0.92rem; }
+      .lead-sub { font-size:0.78rem; color:var(--dim); }
+      .badge { font-size:0.7rem; padding:0.15rem 0.5rem; border-radius:999px; border:1px solid var(--border); color:var(--dim); margin-left:0.35rem; }
+      .badge.hot { color:#86efac; border-color:#14532d; } .badge.flag { color:#fcd34d; border-color:#78350f; }
+      .lead-body { display:none; margin-top:0.6rem; font-size:0.84rem; }
+      .lead.open .lead-body { display:block; }
+      .lead-body div { padding:0.15rem 0; } .lead-body .k { color:var(--dim); }
+      .lead select { width:auto; padding:0.35rem 0.5rem; border-radius:8px; border:1px solid var(--border); background:#121216; color:var(--text); font-size:0.8rem; }
+      a.btn-ghost { text-decoration:none; font-size:0.85rem; }
     </style>
   </div>
   <script>
@@ -221,6 +353,7 @@
       document.getElementById('kbTitle').value = '';
       document.getElementById('kbCategory').value = '';
       document.getElementById('kbContent').value = '';
+      document.getElementById('kbContent').placeholder = 'What should the assistant know?';
       document.getElementById('cancelEdit').style.display = 'none';
     }
 
@@ -252,8 +385,172 @@
       setTimeout(() => { status.textContent = ''; }, 2500);
     }
 
+    // ── Billing ────────────────────────────────────────────────────────────
+    async function postForUrl(path, body, btn) {
+      const status = document.getElementById('billingStatus');
+      if (btn) btn.disabled = true;
+      status.textContent = 'Opening secure checkout...';
+      try {
+        const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.url) { window.location.href = d.url; return; }
+        status.textContent = d.error || 'Something went wrong. Please try again.';
+      } catch (e) { status.textContent = 'Network error. Please try again.'; }
+      if (btn) btn.disabled = false;
+    }
+    function startCheckout(plan, btn) { postForUrl('/api/portal/billing/checkout', { plan }, btn); }
+    function manageBilling(btn) { postForUrl('/api/portal/billing/manage', {}, btn); }
+
+    // ── Leasing assistant settings ─────────────────────────────────────────
+    let leasing = null;
+    const RENTAL = ['long_term', 'seasonal'];
+
+    async function loadLeasing() {
+      try {
+        const r = await fetch('/api/portal/leasing');
+        if (!r.ok) throw new Error('bad status');
+        leasing = await r.json();
+        document.getElementById('lsVertical').value = leasing.vertical;
+        const c = leasing.config || {};
+        document.getElementById('lsCriteria').value = c.rental_criteria || '';
+        document.getElementById('lsApp').value = c.application_url || '';
+        document.getElementById('lsBook').value = c.booking_url || '';
+        document.getElementById('lsEmail').value = c.notify_email || '';
+        document.getElementById('lsEmail').placeholder = leasing.account_email || '';
+        document.getElementById('lsPhone').value = c.notify_phone || '';
+        renderLeasing(true);
+      } catch (e) { document.getElementById('lsStatus').textContent = 'Could not load leasing settings.'; }
+    }
+
+    const PRESETS = {
+      long_term: ['property','move_in','name','phone','email','occupants','lease_length','budget','pets','criteria','tour_time'],
+      seasonal: ['property','stay_dates','name','phone','email','guests','stay_budget','pets','tour_time'],
+    };
+
+    function renderLeasing(fromSaved) {
+      const v = document.getElementById('lsVertical').value;
+      const rental = RENTAL.includes(v);
+      document.getElementById('lsRental').style.display = rental ? 'block' : 'none';
+      document.querySelectorAll('.rental-only').forEach(el => el.style.display = rental ? '' : 'none');
+      document.querySelectorAll('.lt-only').forEach(el => el.style.display = v === 'long_term' ? 'block' : 'none');
+      renderSuggestions(v);
+      if (!rental || !leasing) return;
+      const saved = (fromSaved && leasing.vertical === v) ? (leasing.config.questions || []) : null;
+      const enabled = new Set(saved || PRESETS[v]);
+      document.getElementById('lsQuestions').innerHTML = (leasing.catalog[v] || []).map(q => {
+        const locked = q.key === 'name';
+        return `<label class="q-item"><input type="checkbox" data-q="${q.key}" ${enabled.has(q.key) ? 'checked' : ''} ${locked ? 'disabled' : ''}>
+          <span><span>${esc(q.label)}${locked ? ' (always asked)' : ''}${q.needs_criteria ? ' (needs posted criteria)' : ''}</span><br><span class="q-text">"${esc(q.text.replace('{criteria}', '[your posted criteria]'))}"</span></span></label>`;
+      }).join('');
+    }
+
+    async function saveLeasing(btn) {
+      const v = document.getElementById('lsVertical').value;
+      const status = document.getElementById('lsStatus');
+      const body = { vertical: v };
+      if (RENTAL.includes(v)) {
+        const qs = Array.from(document.querySelectorAll('#lsQuestions input[data-q]')).filter(i => i.checked || i.disabled).map(i => i.dataset.q);
+        body.config = {
+          questions: qs,
+          rental_criteria: v === 'long_term' ? document.getElementById('lsCriteria').value : '',
+          application_url: document.getElementById('lsApp').value.trim(),
+          booking_url: document.getElementById('lsBook').value.trim(),
+          notify_email: document.getElementById('lsEmail').value.trim(),
+          notify_phone: document.getElementById('lsPhone').value.trim(),
+        };
+      }
+      btn.disabled = true; status.textContent = 'Saving...';
+      try {
+        const r = await fetch('/api/portal/leasing', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok) {
+          leasing.vertical = d.vertical; leasing.config = d.config || leasing.config;
+          status.textContent = 'Saved.';
+          if (d.config) document.getElementById('lsPhone').value = d.config.notify_phone || '';
+          loadLeads();
+        } else { status.textContent = d.error || 'Could not save.'; }
+      } catch (e) { status.textContent = 'Network error.'; }
+      btn.disabled = false;
+      setTimeout(() => { status.textContent = ''; }, 4000);
+    }
+
+    // ── Leads ──────────────────────────────────────────────────────────────
+    const openLeads = new Set();
+    function fmtTime(iso) { if (!iso) return ''; const d = new Date(iso); return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+
+    async function loadLeads() {
+      const list = document.getElementById('leadList');
+      try {
+        const r = await fetch('/api/portal/leads');
+        if (!r.ok) throw new Error('bad status');
+        const leads = (await r.json()).leads || [];
+        if (!leads.length) { list.innerHTML = '<div class="empty">No leads yet. They\'ll show up here as soon as prospects start chatting.</div>'; return; }
+        list.innerHTML = leads.map(l => {
+          const prop = (l.summary.find(x => x.label === 'Property / unit') || {}).value || '';
+          const stateBadge = l.status === 'complete' ? '<span class="badge hot">Complete</span>'
+            : l.status === 'abandoned' ? '<span class="badge">Stopped early</span>' : '<span class="badge">In progress</span>';
+          const flag = l.flags.accommodation_request ? '<span class="badge flag">Accommodation request</span>' : '';
+          const contact = [l.phone, l.email].filter(Boolean).map(esc).join(' · ');
+          const rows = l.summary.map(x => `<div><span class="k">${esc(x.label)}:</span> ${esc(x.value)}</div>`).join('');
+          const opts = ['new','contacted','closed'].map(s => `<option value="${s}" ${l.owner_status === s ? 'selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('');
+          return `<div class="lead ${openLeads.has(l.id) ? 'open' : ''}" id="lead-${l.id}">
+            <div class="lead-head" onclick="toggleLead('${l.id}')">
+              <div><div class="lead-name">${esc(l.name || 'Unnamed prospect')}${stateBadge}${flag}</div>
+                <div class="lead-sub">${contact || 'No contact info yet'}${prop ? ' · ' + esc(prop) : ''} · ${fmtTime(l.created_at)}</div></div>
+              <select onclick="event.stopPropagation()" onchange="setLeadStatus('${l.id}', this.value)">${opts}</select>
+            </div>
+            <div class="lead-body">${rows || '<div class="k">No answers yet.</div>'}${l.flags.accommodation_request ? '<div class="k" style="margin-top:0.4rem">Mentioned an assistance animal or accommodation need. Follow up personally; pet rules and fees don\'t apply to assistance animals.</div>' : ''}</div>
+          </div>`;
+        }).join('');
+      } catch (e) { list.innerHTML = '<div class="empty">Could not load leads.</div>'; }
+    }
+    function toggleLead(id) { const el = document.getElementById('lead-' + id); el.classList.toggle('open'); el.classList.contains('open') ? openLeads.add(id) : openLeads.delete(id); }
+    async function setLeadStatus(id, value) {
+      try { const r = await fetch('/api/portal/leads/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner_status: value }) });
+        if (!r.ok) alert('Could not update the lead.'); } catch (e) { alert('Network error.'); }
+    }
+
+    // ── Suggested KB articles ──────────────────────────────────────────────
+    const SUGGEST = {
+      long_term: {
+        'Available units and pricing': 'List each available property or unit: address or name, beds/baths, square feet, monthly rent, deposit, and the date it is available.',
+        'Application process and fees': 'How to apply, the application fee, what documents are needed, and how long approval usually takes.',
+        'Pet policy': 'Which pets are allowed, limits, pet deposit / monthly pet rent. Note: assistance animals are not pets and are handled separately.',
+        'Showings and office hours': 'How tours work (in person, self-guided, video), the days and hours available, and how to schedule.',
+        'Lease terms': 'Lease lengths offered, move-in costs, renewal, early termination, and what utilities are included.',
+        'Parking and amenities': 'Parking, laundry, appliances, pool, gym, storage, and other features of the property.',
+      },
+      seasonal: {
+        'Properties and rates': 'Each rental: name, beds/baths, how many it sleeps, nightly/weekly/monthly rates by season, and minimum stay.',
+        'Booking and deposits': 'How to book, deposit amount, when the balance is due, and accepted payment methods.',
+        'Cancellation policy': 'Cancellation deadlines, refund amounts, and any travel-insurance options.',
+        'Check-in and check-out': 'Check-in and check-out times, how keys or codes work, and early/late options.',
+        'House rules and pets': 'Max occupancy, quiet hours, smoking, parties, and the pet policy. Assistance animals are not pets.',
+        'Amenities and what to bring': 'Wi-Fi, linens, kitchen supplies, beach gear, parking, pool, and anything guests should bring.',
+      },
+    };
+    function renderSuggestions(v) {
+      const box = document.getElementById('kbSuggest');
+      const items = SUGGEST[v];
+      if (!items) { box.innerHTML = ''; return; }
+      box.innerHTML = '<span class="lead-sub" style="align-self:center">Suggested articles:</span>' +
+        Object.keys(items).map(t => `<button class="chip" onclick="prefill(this.dataset.t)" data-t="${esc(t)}">+ ${esc(t)}</button>`).join('');
+    }
+    function prefill(title) {
+      const v = document.getElementById('lsVertical').value;
+      cancelEdit();
+      document.getElementById('kbTitle').value = title;
+      document.getElementById('kbCategory').value = 'leasing';
+      document.getElementById('kbContent').value = '';
+      document.getElementById('kbContent').placeholder = (SUGGEST[v] || {})[title] || '';
+      document.getElementById('kbContent').focus();
+      document.getElementById('kbForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     loadAnalytics();
     loadArticles();
+    loadLeasing().then(loadLeads);
+    setInterval(() => { if (RENTAL.includes(document.getElementById('lsVertical').value)) loadLeads(); }, 30000);
   </script>
 </body>
 </html>

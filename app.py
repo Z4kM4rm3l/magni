@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 load_dotenv()
  
 # Stripe billing blueprint
-from routes.billing import billing_bp
+from routes.billing import billing_bp, portal_billing_bp
 from routes.widget import widget_bp
+from werkzeug.middleware.proxy_fix import ProxyFix
  
 from agents.orchestrator import orchestrator
 from core.conversation_manager import conversation_manager
@@ -34,6 +35,13 @@ from core.client_auth import (
     log_in_client, log_out_client, current_client_id, client_login_required,
 )
 from core.csrf import get_csrf_token, rotate_csrf_token, csrf_valid
+from core.billing_policies import TRIAL_DAYS, SELF_SERVE_PLANS
+from core.leasing import (
+    VERTICALS, RENTAL_VERTICALS, QUESTION_CATALOG, available_questions,
+    normalize_lead_config, LeadConfigError,
+)
+from core.leads import list_leads, set_owner_status, leads_csv, OWNER_STATUSES
+from core import rate_limit
 from core.security import apply_security_headers
 from core.utils import sanitize_input, logger
 # SQL-backed multi-tenant billing
@@ -41,6 +49,9 @@ from core.db import SessionLocal, init_db
 from core.models import Client
  
 app = Flask(__name__)
+# Railway terminates TLS at one proxy hop; trust its X-Forwarded-* headers so
+# request.host_url / remote_addr are the public ones.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = os.getenv("SECRET_KEY", "")
 if not app.secret_key:
     raise RuntimeError("SECRET_KEY environment variable is not set. Cannot start safely.")
@@ -61,6 +72,7 @@ apply_security_headers(app)
 # Register Stripe billing blueprint
 app.register_blueprint(billing_bp, url_prefix='/api/v1')
 app.register_blueprint(widget_bp)
+app.register_blueprint(portal_billing_bp)
  
 # Initialize database tables on startup
 with app.app_context():
@@ -284,6 +296,8 @@ def signup():
     if request.method == "POST":
         if not csrf_valid():
             return render_template("signup.html", error="Your session expired. Please try again."), 403
+        if not rate_limit.hit(f"signup:{request.remote_addr}", limit=5, window_seconds=3600):
+            return render_template("signup.html", error="Too many signups from this network. Please try again later."), 429
         business_name = sanitize_input(request.form.get("business_name", "").strip())
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
@@ -295,7 +309,7 @@ def signup():
             return render_template("signup.html", error="Password must be at least 8 characters.")
         if email_exists(email):
             return render_template("signup.html", error="An account with that email already exists.")
-        client = create_client(business_name=business_name, email=email, tier="starter")
+        client = create_client(business_name=business_name, email=email, tier="starter", trial_days=TRIAL_DAYS)
         set_client_password(client["client_id"], password)
         log_in_client(client["client_id"])
         rotate_csrf_token()
@@ -311,6 +325,9 @@ def client_login():
             return render_template("client_login.html", error="Your session expired. Please try again."), 403
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
+        if not (rate_limit.hit(f"clogin-ip:{request.remote_addr}", limit=20, window_seconds=900)
+                and rate_limit.hit(f"clogin-ipemail:{request.remote_addr}:{email}", limit=8, window_seconds=900)):
+            return render_template("client_login.html", error="Too many attempts. Please wait 15 minutes and try again."), 429
         cid = authenticate_client(email, password)
         if cid:
             log_in_client(cid)
@@ -333,7 +350,14 @@ def client_portal():
     if not client:
         log_out_client()
         return redirect(url_for("client_login"))
-    return render_template("portal.html", client=client, embed_snippet=_embed_snippet(client["api_key"]))
+    return render_template(
+        "portal.html",
+        client=client,
+        embed_snippet=_embed_snippet(client["api_key"]),
+        plans=SELF_SERVE_PLANS,
+        verticals=VERTICALS,
+        billing_flash=request.args.get("billing", ""),
+    )
 
 
 # Portal API — client_id comes ONLY from the session (current_client_id()),
@@ -466,6 +490,80 @@ def portal_settings():
     return jsonify({"client": client})
  
 # â”€â”€ ADMIN HUB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ 
+@app.route("/api/portal/leasing", methods=["GET"])
+@client_login_required
+def portal_leasing_get():
+    """Leasing assistant settings plus the question catalog for each rental type."""
+    client = get_client(current_client_id())
+    if not client:
+        return jsonify({"error": "Client not found"}), 404
+    catalog = {
+        v: [{"key": k, "label": QUESTION_CATALOG[k]["label"], "text": QUESTION_CATALOG[k]["text"],
+             "needs_criteria": bool(QUESTION_CATALOG[k].get("needs_criteria"))}
+            for k in available_questions(v)]
+        for v in RENTAL_VERTICALS
+    }
+    return jsonify({
+        "vertical": client["vertical"],
+        "verticals": VERTICALS,
+        "config": client["lead_config"],
+        "catalog": catalog,
+        "account_email": client["email"],
+    })
+
+
+@app.route("/api/portal/leasing", methods=["PUT"])
+@client_login_required
+def portal_leasing_put():
+    cid = current_client_id()
+    data = request.get_json() or {}
+    vertical = (data.get("vertical") or "general").strip()
+    if vertical not in VERTICALS:
+        return jsonify({"error": "Unknown business type"}), 400
+    try:
+        config = normalize_lead_config(data.get("config") or {}, vertical, strict=True) \
+            if vertical in RENTAL_VERTICALS else None
+    except LeadConfigError as e:
+        return jsonify({"error": str(e)}), 400
+    updates = {"vertical": vertical}
+    if config is not None:
+        updates["lead_config"] = config
+    client = update_client(cid, **updates)
+    if not client:
+        return jsonify({"error": "Client not found"}), 404
+    return jsonify({"vertical": client["vertical"], "config": client["lead_config"]})
+
+
+@app.route("/api/portal/leads", methods=["GET"])
+@client_login_required
+def portal_leads():
+    cid = current_client_id()
+    client = get_client(cid)
+    return jsonify({"leads": list_leads(cid, client["lead_config"] if client else None)})
+
+
+@app.route("/api/portal/leads/<lead_id>", methods=["PUT"])
+@client_login_required
+def portal_lead_update(lead_id):
+    status = ((request.get_json() or {}).get("owner_status") or "").strip()
+    if status not in OWNER_STATUSES:
+        return jsonify({"error": "owner_status must be one of: " + ", ".join(OWNER_STATUSES)}), 400
+    lead = set_owner_status(current_client_id(), lead_id, status)
+    if not lead:
+        return jsonify({"error": "Lead not found"}), 404
+    return jsonify({"lead": lead})
+
+
+@app.route("/api/portal/leads.csv", methods=["GET"])
+@client_login_required
+def portal_leads_csv():
+    body = leads_csv(current_client_id())
+    return app.response_class(
+        body, mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=leads.csv"},
+    )
+
  
 @app.route("/admin")
 @login_required
