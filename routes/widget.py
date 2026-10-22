@@ -17,6 +17,11 @@ from core.utils import sanitize_input, logger
 from core.conversation_manager import conversation_manager
 from core.conversation_store import start_conversation, add_message_to_conversation
 from agents.orchestrator import orchestrator
+from core import rate_limit
+
+# Public endpoint abuse limits (per visitor IP, and per business key).
+WIDGET_PER_IP_PER_MIN = 20
+WIDGET_PER_KEY_PER_MIN = 300
 
 widget_bp = Blueprint("widget", __name__)
 
@@ -89,6 +94,14 @@ def widget_chat():
         resp = make_response("", 204)
         return _add_cors(resp, client)
 
+    if not (rate_limit.hit(f"w-ip:{client.id}:{request.remote_addr}", WIDGET_PER_IP_PER_MIN, 60)
+            and rate_limit.hit(f"w-key:{client.id}", WIDGET_PER_KEY_PER_MIN, 60)):
+        resp = make_response(jsonify({
+            "response": "You're sending messages a little fast. Please wait a moment and try again.",
+            "session_id": data_session_id(),
+        }), 429)
+        return _add_cors(resp, client)
+
     data = request.get_json()
     if not data or "message" not in data:
         return jsonify({"error": "No message provided"}), 400
@@ -127,6 +140,13 @@ def widget_chat():
         "session_id": session_id,
     }))
     return _add_cors(resp, client)
+
+
+def data_session_id():
+    try:
+        return (request.get_json(silent=True) or {}).get("session_id")
+    except Exception:
+        return None
 
 
 @widget_bp.route("/widget/magni.js", methods=["GET"])
@@ -171,7 +191,8 @@ _MAGNI_JS = r"""
       '#mgn-panel.open{display:flex;}',
       '#mgn-header{background:' + color + ';padding:14px 16px;color:#fff;font-family:sans-serif;font-weight:600;font-size:15px;}',
       '#mgn-messages{flex:1;overflow-y:auto;padding:12px;font-family:sans-serif;font-size:14px;display:flex;flex-direction:column;gap:8px;}',
-      '.mgn-msg{max-width:80%;padding:9px 13px;border-radius:12px;line-height:1.45;}',
+      '.mgn-msg{max-width:80%;padding:9px 13px;border-radius:12px;line-height:1.45;white-space:pre-wrap;word-wrap:break-word;}',
+      '.mgn-msg a{color:inherit;text-decoration:underline;}',
       '.mgn-msg.user{align-self:flex-end;background:' + color + ';color:#fff;border-bottom-right-radius:3px;}',
       '.mgn-msg.bot{align-self:flex-start;background:#f3f4f6;color:#111;border-bottom-left-radius:3px;}',
       '#mgn-footer{display:flex;padding:8px;border-top:1px solid #e5e7eb;gap:6px;}',
@@ -219,7 +240,22 @@ _MAGNI_JS = r"""
     if (!messages) return;
     var el = document.createElement('div');
     el.className = 'mgn-msg ' + role;
-    el.textContent = text;
+    // Text nodes + real <a> elements only (never innerHTML), so links are
+    // clickable without opening an HTML-injection hole.
+    var parts = String(text).split(/(https?:\/\/[^\s<>"']+)/g);
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      if (i % 2 === 1) {
+        var url = parts[i].replace(/[.,;:!?)]+$/, '');
+        var tail = parts[i].slice(url.length);
+        var a = document.createElement('a');
+        a.href = url; a.textContent = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        el.appendChild(a);
+        if (tail) el.appendChild(document.createTextNode(tail));
+      } else {
+        el.appendChild(document.createTextNode(parts[i]));
+      }
+    }
     messages.appendChild(el);
     messages.scrollTop = messages.scrollHeight;
   }

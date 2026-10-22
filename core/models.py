@@ -26,6 +26,17 @@ class Client(Base):
     monthly_used           = Column(Integer, default=0)
     billing_period_start   = Column(DateTime(timezone=True), nullable=True)
     billing_period_end     = Column(DateTime(timezone=True), nullable=True)
+    # Self-serve trial + Stripe subscription state. Kept separate from
+    # is_active (operator suspension) so a failed payment never locks an
+    # owner out of the portal where they would fix it. NULL trial_ends_at
+    # means an operator-managed account with no trial clock.
+    trial_ends_at          = Column(DateTime(timezone=True), nullable=True)
+    subscription_status    = Column(String, nullable=True)  # trialing|active|past_due|canceled|unpaid|incomplete...
+    billing_synced_at      = Column(DateTime(timezone=True), nullable=True)  # created-time of last applied Stripe event
+
+    # ── Vertical / leasing assistant ──────────────────────────────────────────
+    vertical    = Column(String, nullable=True, default="general")  # general|long_term|seasonal
+    lead_config = Column(JSON, nullable=True)  # validated by core.leasing.normalize_lead_config
 
     # ── Widget config ─────────────────────────────────────────────────────────
     bot_name        = Column(String, default="Magni")
@@ -44,6 +55,12 @@ class Client(Base):
     )
     conversations = relationship(
         "Conversation",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    leads = relationship(
+        "Lead",
         back_populates="client",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -151,3 +168,58 @@ class Message(Base):
     timestamp = Column(DateTime(timezone=True), nullable=True)
 
     conversation = relationship("Conversation", back_populates="messages")
+
+
+class Lead(Base):
+    """A prospect captured by the leasing assistant. One per (client, chat session).
+
+    The assistant only COLLECTS answers to the owner's enabled questions; it never
+    scores, ranks, or rejects anyone. The owner decides.
+    """
+    __tablename__ = "leads"
+
+    id         = Column(String, primary_key=True, index=True)  # str(uuid.uuid4())
+    client_id  = Column(
+        String,
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    session_id = Column(String, nullable=False, index=True)
+
+    # ── Flow state ────────────────────────────────────────────────────────────
+    status      = Column(String, nullable=False, default="in_progress")  # in_progress|complete|abandoned
+    pending_key = Column(String, nullable=True)   # question currently waiting for an answer
+    reask_count = Column(Integer, default=0)
+    answers     = Column(JSON, nullable=True)     # {question_key: answer}
+    flags       = Column(JSON, nullable=True)     # {"accommodation_request": true, ...}
+
+    # ── Denormalized contact (for the list view + alerts) ─────────────────────
+    contact_name  = Column(String, nullable=True)
+    contact_phone = Column(String, nullable=True)
+    contact_email = Column(String, nullable=True)
+
+    # ── Owner workflow ────────────────────────────────────────────────────────
+    owner_status = Column(String, nullable=False, default="new")  # new|contacted|closed
+    notified_at  = Column(DateTime(timezone=True), nullable=True)
+    notify_kind  = Column(String, nullable=True)  # complete|partial|accommodation
+
+    created_at   = Column(DateTime(timezone=True), nullable=True)
+    updated_at   = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    client = relationship("Client", back_populates="leads")
+
+    __table_args__ = (
+        Index("ix_leads_client_created", "client_id", "created_at"),
+        Index("ix_leads_client_session", "client_id", "session_id"),
+    )
+
+
+class StripeEvent(Base):
+    """Processed Stripe webhook event ids, so a redelivered event is applied once."""
+    __tablename__ = "stripe_events"
+
+    id          = Column(String, primary_key=True)  # Stripe event id (evt_...)
+    type        = Column(String, nullable=True)
+    received_at = Column(DateTime(timezone=True), nullable=True)
