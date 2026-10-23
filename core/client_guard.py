@@ -160,6 +160,14 @@ def track_and_validate_request(
 
         # All checks passed — increment atomically within the locked transaction
         client.monthly_used = used + 1
+        # Warn the owner once at 80% and once at the limit. The row is locked,
+        # so exactly one request crosses each line per billing period.
+        if limit > 0:
+            client._usage_limit = limit
+            if client.monthly_used == limit:
+                client._usage_alert = "limit"
+            elif client.monthly_used == -(-limit * 8 // 10):  # ceil(80%)
+                client._usage_alert = "80"
         db.add(client)
         # Caller is responsible for db.commit()
 

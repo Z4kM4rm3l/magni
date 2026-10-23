@@ -10,8 +10,12 @@ different session keys and never grant each other's access.
 - log_in_client / log_out_client manage the client session.
 - client_login_required guards portal routes.
 """
+import os
 import time
+import hashlib
 from functools import wraps
+
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from flask import session, redirect, url_for, jsonify, request
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -53,6 +57,51 @@ def authenticate_client(email: str, raw_password: str) -> str | None:
         if c and check_password_hash(c.password_hash, raw_password):
             return c.id
         return None
+    finally:
+        db.close()
+
+
+# ── Password reset links ────────────────────────────────────────────────────
+# Signed with SECRET_KEY, valid for an hour, and tied to the current password
+# hash: once the password changes, every earlier link stops working. No table.
+RESET_MAX_AGE = 60 * 60
+
+
+def _reset_signer():
+    return URLSafeTimedSerializer(os.getenv("SECRET_KEY", ""), salt="magni-password-reset")
+
+
+def _hash_fingerprint(password_hash: str) -> str:
+    return hashlib.sha256((password_hash or "").encode()).hexdigest()[:16]
+
+
+def make_reset_token(email: str) -> str | None:
+    """A reset token for an active self-serve account, or None if there isn't one."""
+    db = SessionLocal()
+    try:
+        c = (db.query(Client)
+             .filter(Client.email == email, Client.password_hash.isnot(None), Client.is_active == True)
+             .first())
+        if not c:
+            return None
+        return _reset_signer().dumps({"c": c.id, "h": _hash_fingerprint(c.password_hash)})
+    finally:
+        db.close()
+
+
+def check_reset_token(token: str) -> str | None:
+    """The client_id the token was issued for, if it's genuine, under an hour
+    old, unused, and the account is still active."""
+    try:
+        data = _reset_signer().loads(token, max_age=RESET_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return None
+    db = SessionLocal()
+    try:
+        c = db.get(Client, data.get("c"))
+        if not c or not c.is_active or not c.password_hash:
+            return None
+        return c.id if data.get("h") == _hash_fingerprint(c.password_hash) else None
     finally:
         db.close()
 

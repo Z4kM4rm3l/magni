@@ -31,11 +31,24 @@ Everything below is one-time setup. Do it in Stripe **test mode** first, run the
 | `STRIPE_WEBHOOK_SECRET` | `whsec_...` from step 1.3 |
 | `STRIPE_PRICE_STARTER` | `price_...` for Starter |
 | `STRIPE_PRICE_PROFESSIONAL` | `price_...` for Pro |
-| `MAGNI_SMTP_FROM` | Gmail address that sends alerts |
-| `MAGNI_SMTP_PASSWORD` | Gmail **app password** for that address |
+| `MAGNI_SMTP_FROM` | the address mail comes from, on your own domain (e.g. `alerts@yourdomain.com`) |
+| `MAGNI_SMTP_PASSWORD` | the email provider's SMTP password / API token (see "Email sending" below) |
+| `MAGNI_SMTP_HOST` / `MAGNI_SMTP_PORT` / `MAGNI_SMTP_USER` | the provider's SMTP settings. Leave unset only for a Gmail test account |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | optional, for SMS lead alerts (see note) |
 
 **SMS note:** texting US numbers from a regular Twilio number requires A2P 10DLC registration (brand + campaign), which can take one to a few weeks. Email alerts work immediately; SMS turns on by itself once these three variables are set.
+
+## Email sending
+
+Lead alerts, booking confirmations, reminders, usage warnings and password resets all go through one SMTP connection. Gmail works for testing but caps sending (about 500 a day) and its mail sent "from" a business name often lands in spam. Before real customers, use a transactional email service on your own domain. Any of these work; the app needs no code change, only variables:
+
+| Provider | `MAGNI_SMTP_HOST` | `MAGNI_SMTP_PORT` | `MAGNI_SMTP_USER` | `MAGNI_SMTP_PASSWORD` |
+|---|---|---|---|---|
+| Postmark (recommended for transactional mail) | `smtp.postmarkapp.com` | `587` | the Server API token | the same Server API token |
+| Resend | `smtp.resend.com` | `587` | `resend` | your API key |
+| SendGrid | `smtp.sendgrid.net` | `587` | `apikey` | your API key |
+
+Check the provider's own SMTP page for the current values. Then, in the provider's dashboard, verify your domain and add the DNS records it gives you (SPF, DKIM, and a DMARC record such as `v=DMARC1; p=none; rua=mailto:you@yourdomain.com`). Send yourself a lead alert and a booking confirmation and confirm they land in the inbox, not spam. Use the same variables on the `lead-sweep` cron service.
 
 ## 3. Database
 
@@ -55,7 +68,7 @@ Prospects who give a phone or email and then stop replying get sent to the owner
 - **+ New → GitHub repo → magni** (a second service, e.g. `lead-sweep`)
 - **Settings → Start Command:** `python scripts/sweep_leads.py`
 - **Settings → Cron Schedule:** `*/10 * * * *` (UTC; Railway's minimum is 5 minutes)
-- **Variables:** `DATABASE_URL`, `MAGNI_SMTP_FROM`, `MAGNI_SMTP_PASSWORD`, `PUBLIC_BASE_URL` (and the Twilio ones once SMS is approved)
+- **Variables:** `DATABASE_URL`, `PUBLIC_BASE_URL`, and the same `MAGNI_SMTP_*` variables as the web service (and the Twilio ones once SMS is approved)
 
 Optional: a daily cron service for `python scripts/reset_monthly_usage.py` (e.g. `0 9 * * *`) with `DATABASE_URL` and `STRIPE_SECRET_KEY`. It resets monthly conversation counts for paying accounts at each Stripe renewal and for operator-managed accounts on every run; trials are never reset.
 
