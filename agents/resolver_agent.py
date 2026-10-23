@@ -69,6 +69,10 @@ class ResolverAgent(BaseAgent):
 
             full_system = f"{identity_line(payload)}\n\n{MAGNI_SYSTEM_PROMPT}\n\n{flow_context}"
             full_system += f"\n\n{RENTAL_RULES}"
+            properties = payload.get("properties") or []
+            if properties:
+                full_system += ("\n\nPROPERTIES this business lists (when a visitor's question could be about "
+                                "more than one, ask which one they mean): " + "; ".join(properties))
             if extra_instructions:
                 full_system += f"\n\n{extra_instructions}"
             if kb_context:

@@ -127,7 +127,12 @@ def build_lead_alert(kind: str, business_name: str, lead: dict) -> tuple[str, st
     lines = [f"{title} from your website chat ({business_name or 'your business'})", ""]
     for item in lead.get("summary", []):
         lines.append(f"{item['label']}: {item['value']}")
-    if lead.get("flags", {}).get("accommodation_request"):
+    flags = lead.get("flags", {})
+    if flags.get("after_hours"):
+        lines += ["", "Came in after your business hours."]
+    if flags.get("lang") == "es":
+        lines += ["", "The prospect chatted in Spanish."]
+    if flags.get("accommodation_request"):
         lines += ["", "NOTE: The prospect mentioned an assistance animal or an accommodation need.",
                   "Please follow up personally. Do not apply pet rules or fees to assistance animals."]
     lines += ["", f"See all leads: {portal_url()}", "",
@@ -138,7 +143,11 @@ def build_lead_alert(kind: str, business_name: str, lead: dict) -> tuple[str, st
     for item in lead.get("summary", []):
         if item["label"] in ("Phone", "Property / unit", "Move-in date", "Stay dates") or str(item["value"]).startswith("Booked: "):
             bits.append(f"{item['label']}: {item['value']}")
-    if lead.get("flags", {}).get("accommodation_request"):
+    if flags.get("after_hours"):
+        bits.append("After hours")
+    if flags.get("lang") == "es":
+        bits.append("Chatted in Spanish")
+    if flags.get("accommodation_request"):
         bits.append("Accommodation request, follow up personally")
     bits.append(portal_url())
     sms_body = "\n".join(bits)
@@ -161,10 +170,16 @@ def notify_owner(kind: str, business_name: str, to_email: str, to_phone: str, le
 
 # ── Appointment emails ──────────────────────────────────────────────────────
 def send_appointment_emails(kind: str, *, business_name: str, owner_email: str, appt: dict,
-                            details: str, manage_url: str, ics_for_prospect: str | None = None) -> None:
+                            details: str, manage_url: str, ics_for_prospect: str | None = None,
+                            lang: str = "en") -> None:
     """kind: booked | canceled_by_prospect | canceled_by_owner | reminder.
     Prospect emails come "from" the business name with Reply-To the owner, so a
-    prospect who hits reply reaches the business, not Magni."""
+    prospect who hits reply reaches the business, not Magni. They're written in
+    the language the prospect chatted in (lang); the owner's are English."""
+    if lang == "es" and kind in ("booked", "canceled_by_owner", "reminder"):
+        return _send_appointment_emails_es(kind, business_name=business_name, owner_email=owner_email,
+                                           appt=appt, details=details, manage_url=manage_url,
+                                           ics_for_prospect=ics_for_prospect)
     biz = business_name or "our team"
     when = appt.get("when", "")
     who = appt.get("name") or "A prospect"
@@ -200,5 +215,42 @@ def send_appointment_emails(kind: str, *, business_name: str, owner_email: str, 
                                f"Can't make it? Cancel here: {manage_url}"])
             send_email(appt["email"], f"Reminder: {when} with {biz}", body,
                        reply_to=owner_email or None, from_name=biz)
+
+    _dispatch(_send)
+
+
+def _send_appointment_emails_es(kind, *, business_name, owner_email, appt, details, manage_url, ics_for_prospect):
+    biz = business_name or "nuestro equipo"
+    when = appt.get("when_es") or appt.get("when", "")
+    prop = f" ({appt['property']})" if appt.get("property") else ""
+    hi = f"Hola {appt.get('name') or ''},".replace(" ,", ",")
+
+    def _send():
+        if not appt.get("email"):
+            return
+        if kind == "booked":
+            body = "\n".join([
+                hi, "",
+                f"Su cita con {biz} quedó confirmada para el {when}{prop}.",
+                *(["", details] if details else []), "",
+                f"¿Necesita cancelar? {manage_url}",
+                "Para cambiar la hora, cancele ahí y elija un nuevo horario en el chat, o simplemente responda a este correo.", "",
+                "Adjuntamos una invitación de calendario.",
+            ])
+            send_email(appt["email"], f"Confirmada: {when} con {biz}", body,
+                       reply_to=owner_email or None, ics=ics_for_prospect, from_name=business_name or "Magni")
+        elif kind == "canceled_by_owner":
+            body = "\n".join([hi, "",
+                               f"{biz} tuvo que cancelar su cita del {when}. Lamentamos el cambio.",
+                               "Responda a este correo o escríbanos en el chat de nuestro sitio web para elegir un nuevo horario."])
+            send_email(appt["email"], f"Cancelada: {when} con {biz}", body,
+                       reply_to=owner_email or None, from_name=business_name or "Magni")
+        elif kind == "reminder":
+            body = "\n".join([hi, "",
+                               f"Le recordamos su cita con {biz} el {when}{prop}.",
+                               *(["", details] if details else []), "",
+                               f"¿No puede asistir? Cancele aquí: {manage_url}"])
+            send_email(appt["email"], f"Recordatorio: {when} con {biz}", body,
+                       reply_to=owner_email or None, from_name=business_name or "Magni")
 
     _dispatch(_send)

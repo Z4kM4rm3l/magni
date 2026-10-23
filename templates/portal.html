@@ -118,6 +118,7 @@
         <a class="btn-ghost" href="/api/portal/leads.csv">Export CSV</a>
       </div>
       <p style="margin-top:0.4rem">Prospects your assistant talked to. New leads are emailed (and texted, if you add a phone below) the moment they come in. This list refreshes on its own.</p>
+      <p class="q-text" style="margin:0 0 0.6rem">Leads that come in outside your weekly hours (set under Online booking) are tagged <b>After hours</b>. Prospects who chat in Spanish get the same questions in Spanish and are tagged <b>Spanish</b>.</p>
       <div id="leadList" class="lead-list"><div class="empty">Loading...</div></div>
     </div>
 
@@ -144,6 +145,14 @@
           </label>
           <label class="fld">Application or booking link (optional)
             <input id="lsApp" type="url" placeholder="https://...">
+          </label>
+          <label class="fld">Your properties, one per line (optional)
+            <textarea id="lsProps" rows="3" placeholder="Palm Court Apartments&#10;Bayview Townhomes&#10;12 Ocean Dr (3BR house)"></textarea>
+            <span class="q-text">Prospects pick from this list when asked which property they want, so every lead names a property you recognize. Up to 50.</span>
+          </label>
+          <label class="fld">For current residents (optional)
+            <textarea id="lsResident" rows="2" maxlength="300" placeholder="e.g. Call the office at (239) 555-0100, or request maintenance at https://..."></textarea>
+            <span class="q-text">When a current resident asks about rent, repairs or their lease, your assistant shares this. Residents are never counted as leads.</span>
           </label>
           <div class="fld" style="margin-top:0.6rem">Online booking</div>
           <label class="q-item"><input type="checkbox" id="schEnabled" onchange="toggleSchedule()">
@@ -295,7 +304,8 @@
       .q-list { margin:0.3rem 0 1rem; }
       .q-item { display:flex; gap:0.6rem; align-items:flex-start; padding:0.45rem 0; border-top:1px solid var(--border); font-size:0.85rem; }
       .q-item input { width:auto; margin:0.2rem 0 0; }
-      .q-item .q-text { color:var(--dim); font-size:0.8rem; }
+      .q-item .q-text, .q-text { color:var(--dim); font-size:0.8rem; }
+      .fld .q-text { display:block; margin-top:0.25rem; font-weight:400; }
       .fine { font-size:0.78rem !important; color:var(--dim); line-height:1.5; }
       .suggest { display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.9rem; }
       .chip { font-size:0.78rem; padding:0.35rem 0.65rem; border-radius:999px; border:1px dashed var(--border); color:var(--dim); background:transparent; cursor:pointer; }
@@ -457,6 +467,8 @@
         const c = leasing.config || {};
         document.getElementById('lsCriteria').value = c.rental_criteria || '';
         document.getElementById('lsApp').value = c.application_url || '';
+        document.getElementById('lsProps').value = (c.properties || []).join('\n');
+        document.getElementById('lsResident').value = c.resident_contact || '';
         document.getElementById('lsBook').value = c.booking_url || '';
         document.getElementById('lsEmail').value = c.notify_email || '';
         document.getElementById('lsEmail').placeholder = leasing.account_email || '';
@@ -499,6 +511,8 @@
           questions: qs,
           rental_criteria: v === 'long_term' ? document.getElementById('lsCriteria').value : '',
           application_url: document.getElementById('lsApp').value.trim(),
+          properties: document.getElementById('lsProps').value.split('\n').map(s => s.trim()).filter(Boolean),
+          resident_contact: document.getElementById('lsResident').value.trim(),
           booking_url: document.getElementById('lsBook').value.trim(),
           notify_email: document.getElementById('lsEmail').value.trim(),
           notify_phone: document.getElementById('lsPhone').value.trim(),
@@ -618,7 +632,9 @@
           const prop = (l.summary.find(x => x.label === 'Property / unit') || {}).value || '';
           const stateBadge = l.status === 'complete' ? '<span class="badge hot">Complete</span>'
             : l.status === 'abandoned' ? '<span class="badge">Stopped early</span>' : '<span class="badge">In progress</span>';
-          const flag = l.flags.accommodation_request ? '<span class="badge flag">Accommodation request</span>' : '';
+          const flag = (l.flags.accommodation_request ? '<span class="badge flag">Accommodation request</span>' : '')
+            + (l.flags.after_hours ? '<span class="badge">After hours</span>' : '')
+            + (l.flags.lang === 'es' ? '<span class="badge">Spanish</span>' : '');
           const contact = [l.phone, l.email].filter(Boolean).map(esc).join(' · ');
           const rows = l.summary.map(x => `<div><span class="k">${esc(x.label)}:</span> ${esc(x.value)}</div>`).join('');
           const opts = ['new','contacted','closed'].map(s => `<option value="${s}" ${l.owner_status === s ? 'selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('');

@@ -15,6 +15,7 @@ python tests/test_scheduler.py          # built-in scheduler (booking, cancel, r
 python tests/test_portal_isolation.py   # tenant isolation + CSRF
 python tests/test_launch_fixes.py       # usage per conversation, trial resets, key + login hardening
 python tests/test_rental_focus.py       # rental-only prompts, leasing analytics, tiers, demo account, migration 0007
+python tests/test_market_features.py    # residents, after-hours tags, Spanish intake + booking, multiple properties
 python tests/test_conversation_ownership.py
 python tests/test_orchestrator.py
 ```
@@ -29,7 +30,8 @@ Each suite prints `ALL PASSED` (orchestrator prints `PASS`). They run on in-memo
 - `core/llm.py`: the ONLY place that calls the model. `generate()` / `chat()`; model from `CLAUDE_MODEL` (default `claude-haiku-5-5`). Tests stub these two functions.
 - `core/leasing.py`: question catalog, presets, config validation, Fair Housing guardrails (`check_output`, `detect_accommodation`).
 - `core/lead_flow.py`: deterministic intake engine (what to ask, in what order), booking step, alerts, partial-lead sweep, reminders.
-- `core/scheduling.py`: availability, reply parsing ("2", "Saturday at 11am"), booking, cancel, .ics invites.
+- `core/scheduling.py`: availability, reply parsing ("2", "Saturday at 11am", "el sábado a las 11"), booking, cancel, .ics invites, `is_after_hours`.
+- `core/i18n.py`: English and Spanish for every fixed reply, plus `detect_lang`. A lead's language is set once (`lead.flags["lang"]`) and kept. Owner-facing text stays English.
 - `core/billing_policies.py` + `routes/billing.py`: 14-day trial, Stripe Checkout / Customer Portal, webhooks (idempotent, always re-read the subscription live from Stripe).
 - `core/client_guard.py`: per-request usage + billing gate before any model call.
 - `routes/widget.py`: embeddable widget (`/widget/magni.js`, `/widget/chat`), per-client allowed domains, rate limits.
@@ -39,7 +41,7 @@ Each suite prints `ALL PASSED` (orchestrator prints `PASS`). They run on in-memo
 ## Rules that must not regress
 - **Tenant isolation:** portal routes take `client_id` only from the session (`current_client_id()`), never from the request. Every query is scoped by `client_id`.
 - **CSRF:** mutating portal/admin requests go through `client_login_required` / `api_login_required`, which enforce the token.
-- **Fair Housing:** every prospect gets the same questions in the same order with fixed wording; the assistant never scores, ranks, or rejects anyone; assistance animals are never pets; rental replies pass `check_output()`. Don't add owner-written questions.
+- **Fair Housing:** every prospect gets the same questions in the same order with fixed wording (fixed per language: English `text`, Spanish `text_es`); the assistant never scores, ranks, or rejects anyone; assistance animals are never pets; rental replies pass `check_output()`, which checks English and Spanish phrasing. Don't add owner-written questions. Any new fixed reply needs both languages in `core/i18n.py`.
 - **Scheduler safety:** only an exact pick ("2") or an explicit day + clock time books outright; anything looser is confirmed first. One booked appointment per slot and per prospect, enforced by partial unique indexes.
 - **Billing:** a failed payment never sets `is_active=False`; billing state lives in `subscription_status`. Visitor-facing errors stay neutral (`VISITOR_UNAVAILABLE`).
 - **Never hold a DB transaction open across an LLM call** (see `_load_detached` / `_save` in `lead_flow.py`).
