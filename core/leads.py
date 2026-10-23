@@ -143,47 +143,51 @@ def leads_csv(client_id: str) -> str:
 
 def leasing_metrics(client_id: str, days: int = 30) -> dict:
     """The numbers an owner pays for, over the last `days` days: chats, leads
-    (finished and partial), accommodation requests, and tours booked or
-    canceled. Tenant-scoped like everything here."""
+    (finished and partial), after-hours leads, accommodation requests, and
+    tours booked, canceled and upcoming. Every number is a COUNT in the
+    database (indexed by client and date), so it stays fast however much
+    history a tenant has. Tenant-scoped like everything here."""
+    from sqlalchemy import func, or_, and_
     from core.models import Conversation, Appointment
     now = _now()
     since = now - timedelta(days=days)
 
-    def recent(dt):
-        if dt is None:
-            return False
-        return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)) >= since
+    def count(q):
+        return q.scalar() or 0
 
     db = SessionLocal()
     try:
-        convs = db.query(Conversation.started_at).filter(Conversation.client_id == client_id).all()
-        leads = db.query(Lead).filter(Lead.client_id == client_id).all()
-        appts = db.query(Appointment).filter(Appointment.client_id == client_id).all()
+        conv = db.query(func.count(Conversation.session_id)).filter(Conversation.client_id == client_id)
+        conversations = count(conv.filter(Conversation.started_at >= since))
+        conversations_all = count(conv)
+
+        leads = db.query(func.count(Lead.id)).filter(Lead.client_id == client_id, Lead.created_at >= since)
+        # An intake that never captured anything isn't a lead (same rule as the Leads list).
+        has_contact = or_(Lead.contact_phone.isnot(None), Lead.contact_email.isnot(None))
+        complete = count(leads.filter(Lead.status == "complete"))
+        partial = count(leads.filter(Lead.status != "complete", has_contact))
+        after_hours = count(leads.filter(Lead.flags["after_hours"].as_boolean() == True,
+                                         or_(Lead.status == "complete", has_contact)))
+        accommodation = count(leads.filter(Lead.flags["accommodation_request"].as_boolean() == True))
+
+        appts = db.query(func.count(Appointment.id)).filter(Appointment.client_id == client_id)
+        recent_appts = appts.filter(Appointment.created_at >= since)
+        tours_booked = count(recent_appts)
+        tours_canceled = count(recent_appts.filter(Appointment.status == "canceled"))
+        upcoming = count(appts.filter(Appointment.status == "booked", Appointment.start_at > now))
     finally:
         db.close()
 
-    conversations = sum(1 for (t,) in convs if recent(t))
-    leads_recent = [l for l in leads if recent(l.created_at) and (l.answers or l.flags)]
-    complete = sum(1 for l in leads_recent if l.status == "complete")
-    partial = sum(1 for l in leads_recent if l.status != "complete" and (l.contact_phone or l.contact_email))
-    after_hours = sum(1 for l in leads_recent if (l.flags or {}).get("after_hours"))
-    accommodation = sum(1 for l in leads_recent if (l.flags or {}).get("accommodation_request"))
-    appts_recent = [a for a in appts if recent(a.created_at)]
-    upcoming = 0
-    for a in appts:
-        start = a.start_at if a.start_at.tzinfo else a.start_at.replace(tzinfo=timezone.utc)
-        if a.status == "booked" and start > now:
-            upcoming += 1
     return {
         "days": days,
         "conversations": conversations,
-        "conversations_all_time": len(convs),
+        "conversations_all_time": conversations_all,
         "leads_complete": complete,
         "leads_partial": partial,
         "leads_after_hours": after_hours,
         "accommodation_requests": accommodation,
-        "tours_booked": sum(1 for a in appts_recent),
-        "tours_canceled": sum(1 for a in appts_recent if a.status == "canceled"),
+        "tours_booked": tours_booked,
+        "tours_canceled": tours_canceled,
         "tours_upcoming": upcoming,
         "lead_rate": round(100 * (complete + partial) / conversations) if conversations else 0,
     }

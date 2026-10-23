@@ -72,6 +72,8 @@ Prospects who give a phone or email and then stop replying get sent to the owner
 
 Optional: a daily cron service for `python scripts/reset_monthly_usage.py` (e.g. `0 9 * * *`) with `DATABASE_URL` and `STRIPE_SECRET_KEY`. It resets monthly conversation counts for paying accounts at each Stripe renewal and for operator-managed accounts on every run; trials are never reset.
 
+**Data retention.** Add a daily cron service for `python scripts/apply_retention.py` (e.g. `30 6 * * *`) with `DATABASE_URL`. It deletes chat transcripts older than 12 months and leads and appointments older than 24 months (`core/retention.py`). Put the same periods in your terms of service and privacy policy.
+
 **Landing-page demo.** Run `python scripts/create_demo_client.py` once from the Railway shell (needs `PUBLIC_BASE_URL`). It creates a sample apartment community that the widget on `/` uses. Then add a daily cron service for `python scripts/reset_demo_daily.py` (e.g. `0 5 * * *`) with `DATABASE_URL`, which clears the demo's usage, leads and bookings. The demo never sends emails or texts.
 
 The web service's **Start Command** should be `gunicorn --workers 1 --threads 8 --timeout 120 app:app` (already set in `railway.json` and `Procfile`). Keep one worker and one replica: the login lockout, rate limits and global cap live in that process's memory.

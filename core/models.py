@@ -156,6 +156,7 @@ class Conversation(Base):
     # Analytics always filters by client_id and windows on started_at.
     __table_args__ = (
         Index("ix_conv_client_started", "client_id", "started_at"),
+        Index("ix_conv_started", "started_at"),  # retention
     )
 
 
@@ -219,6 +220,7 @@ class Lead(Base):
     __table_args__ = (
         Index("ix_leads_client_created", "client_id", "created_at"),
         Index("ix_leads_client_session", "client_id", "session_id"),
+        Index("ix_leads_created", "created_at"),  # retention
     )
 
 
@@ -258,6 +260,8 @@ class Appointment(Base):
 
     __table_args__ = (
         Index("ix_appt_client_start", "client_id", "start_at"),
+        Index("ix_appt_client_created", "client_id", "created_at"),  # analytics
+        Index("ix_appt_end", "end_at"),  # retention
         # One booked appointment per client per slot, enforced by the database.
         Index("uq_appt_client_slot_booked", "client_id", "start_at", unique=True,
               postgresql_where=text("status = 'booked'"), sqlite_where=text("status = 'booked'")),

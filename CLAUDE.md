@@ -17,6 +17,7 @@ python tests/test_launch_fixes.py       # usage per conversation, trial resets, 
 python tests/test_rental_focus.py       # rental-only prompts, leasing analytics, tiers, demo account, migration 0007
 python tests/test_market_features.py    # residents, after-hours tags, Spanish intake + booking, multiple properties
 python tests/test_account_emails.py     # SMTP provider, forgot password, 80% / limit usage warnings
+python tests/test_retention.py          # 12 / 24 month retention, database-side analytics counts (also runs on Postgres)
 python tests/test_conversation_ownership.py
 python tests/test_orchestrator.py
 ```
@@ -47,6 +48,7 @@ Each suite prints `ALL PASSED` (orchestrator prints `PASS`). They run on in-memo
 - **Billing:** a failed payment never sets `is_active=False`; billing state lives in `subscription_status`. Visitor-facing errors stay neutral (`VISITOR_UNAVAILABLE`).
 - **Never hold a DB transaction open across an LLM call** (see `_load_detached` / `_save` in `lead_flow.py`).
 - **Links** in emails and chat come from `PUBLIC_BASE_URL` only; the app refuses to start in production without it.
+- **Retention:** chats are deleted after 12 months, leads and appointments after 24 (`core/retention.py`, daily `scripts/apply_retention.py`). Analytics count in the database (`func.count`), never by loading a tenant's rows into Python.
 
 ## Required env vars (Railway)
 `SECRET_KEY`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL`, `ALLOWED_ORIGINS`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (hash), `MAGNI_SMTP_FROM`, `MAGNI_SMTP_PASSWORD`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PROFESSIONAL`. Email provider: `MAGNI_SMTP_HOST`, `MAGNI_SMTP_PORT`, `MAGNI_SMTP_USER` (Gmail if unset; use a transactional provider in production). Optional: `CLAUDE_MODEL`, `CLAUDE_FAST_MODEL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`.
