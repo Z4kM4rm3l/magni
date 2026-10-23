@@ -22,12 +22,13 @@ from core import leasing as L
 from core import leads as leads_store
 from core import notifier
 from core import scheduling as S
+from core.i18n import t, detect_lang, is_emergency
 from core.utils import logger
 
-ACKS = ("Thanks!", "Got it.", "Great, thank you.")
-OPT_OUT_REPLY = ("No problem at all. If you change your mind, just let me know. "
-                 "Is there anything else I can help with?")
-REASK_PREFIX = "Sorry, I didn't quite catch that. "
+# English versions, kept as names for callers and tests; core/i18n.py holds both languages.
+ACKS = t("acks", "en")
+OPT_OUT_REPLY = t("opt_out", "en")
+REASK_PREFIX = t("reask", "en")
 BRIEF_ANSWER_RULE = ("Answer in 1-3 sentences using only the knowledge base for business-specific "
                      "facts. Do not ask the visitor any questions and do not offer further help; "
                      "a short set of intake questions follows your reply automatically.")
@@ -50,7 +51,7 @@ def load_client_context(client_id: str) -> dict | None:
         c = db.get(Client, client_id)
         if not c:
             return None
-        vertical = c.vertical or "general"
+        vertical = L.vertical_of(c.vertical)
         return {
             "client_id": c.id,
             "business_name": c.business_name or "",
@@ -77,7 +78,18 @@ def _alert_targets(ctx):
 
 
 # ── Notifications ───────────────────────────────────────────────────────────
+# The landing-page demo never emails or texts anyone: visitors type any
+# address they like there, and the demo has no owner to alert.
+DEMO_CLIENT_ID = "demo"
+
+
+def _is_demo(ctx) -> bool:
+    return bool(ctx) and ctx.get("client_id") == DEMO_CLIENT_ID
+
+
 def _send_alert(ctx, lead, kind):
+    if _is_demo(ctx):
+        return
     to_email, to_phone = _alert_targets(ctx)
     lead_d = leads_store.lead_to_dict(lead, ctx["config"])
     appt = getattr(lead, "_new_appt", None)
@@ -90,6 +102,8 @@ def _send_alert(ctx, lead, kind):
 
 
 def _send_booking_emails(ctx, appt):
+    if _is_demo(ctx):
+        return
     sched = _schedule(ctx)
     a = S.appt_to_dict(appt, sched)
     to_email, _ = _alert_targets(ctx)
@@ -98,7 +112,21 @@ def _send_booking_emails(ctx, appt):
     notifier.send_appointment_emails("booked", business_name=ctx["business_name"], owner_email=to_email,
                                      appt=a, details=sched.get("details", ""),
                                      manage_url=notifier.appt_url(appt.cancel_token),
-                                     ics_for_prospect=prospect_ics)
+                                     ics_for_prospect=prospect_ics, lang=_lang(ctx))
+
+
+def _lead_lang(client_id, lead_id) -> str:
+    """The language a booked prospect chatted in, for emails sent later."""
+    if not lead_id:
+        return "en"
+    db = SessionLocal()
+    try:
+        row = db.query(Lead.flags).filter(Lead.client_id == client_id, Lead.id == lead_id).first()
+        return ((row[0] if row else None) or {}).get("lang") or "en"
+    except Exception:
+        return "en"
+    finally:
+        db.close()
 
 
 # ── Scheduling helpers ──────────────────────────────────────────────────────
@@ -107,30 +135,56 @@ _SCHEDULING_RE = re.compile(
     r"\b(?:book|schedule|set up|arrange|make|get)\b.{0,25}\b(?:tour|showing|appointment|viewing|walk[\s-]?through|time to (?:see|visit|tour))\b"
     r"|\b(?:tour|see|visit|view)\s+(?:the|it|a|this|that|your)\s*(?:\w+\s+){0,2}(?:unit|place|home|property|apartment|house|condo|rental|2br|3br|1br|studio)\b"
     r"|\bcan (?:i|we) (?:tour|come (?:see|by|look)|see it|take a look|visit)\b"
-    r"|\b(?:reschedule|book (?:a |another |a different |a new )?(?:time|tour|showing))\b", re.I)
-_CHANGE_RE = re.compile(r"\b(?:reschedule|cancel|change (?:my|the) (?:time|appointment|tour|showing))\b", re.I)
+    r"|\b(?:reschedule|book (?:a |another |a different |a new )?(?:time|tour|showing))\b"
+    r"|\b(?:agendar|programar|reservar|hacer|apartar)\b.{0,25}\b(?:visita|cita|recorrido|llamada)\b"
+    r"|\b(?:puedo|podemos|quisiera|quiero|me gustar[ií]a)\s+(?:ver|visitar|conocer|recorrer)\b", re.I)
+_CHANGE_RE = re.compile(r"\b(?:reschedule|cancel|change (?:my|the) (?:time|appointment|tour|showing)|"
+                        r"cancelar|reprogramar|cambiar (?:mi|la) (?:cita|visita|hora))\b", re.I)
 _DECLINE_BOOKING_RE = re.compile(
     r"^\s*(?:(?:maybe|ok,?|okay,?)\s+)?(?:later|not now|not yet|no thanks?|no,? thank you|i'?ll call|call me instead|"
-    r"i'?ll book later|i'?ll do it later|nah|no)\s*[.!,]?\s*(?:(?:thanks|thank you|thx)\s*[.!]?\s*)?$", re.I)
-_NONE_WORK_RE = re.compile(r"\bnone of (?:these|those|them|the times)\b|\bneither\b|\bdon'?t work\b|\bdoesn'?t work\b", re.I)
+    r"i'?ll book later|i'?ll do it later|nah|no|"
+    r"m[aá]s tarde|ahora no|todav[ií]a no|no,? gracias|lo hago despu[eé]s|ll[aá]menme|mejor ll[aá]menme)"
+    r"\s*[.!,]?\s*(?:(?:thanks|thank you|thx|gracias)\s*[.!]?\s*)?$", re.I)
+_NONE_WORK_RE = re.compile(r"\bnone of (?:these|those|them|the times)\b|\bneither\b|\bdon'?t work\b|\bdoesn'?t work\b|"
+                           r"\bninguno\b|\bninguna\b|\bno me (?:sirve|sirven|funciona|funcionan|queda|quedan)\b", re.I)
 # A "yes" only when the whole reply is a yes ("Sure, but Friday instead?" is not).
 _YES_RE = re.compile(
     r"\s*(?:yes|yeah|yep|yup|sure|ok|okay|correct|perfect|book it|please do|do it|sounds good|that works|great|"
-    r"yes please|yes,? book it|that'?s right)\s*[.!]?\s*(?:,?\s*(?:please|thanks|thank you|thx)\s*[.!]?)?\s*", re.I)
-_NO_RE = re.compile(r"^\s*(?:no|nope|nah|not that|wrong|actually)\b", re.I)
-_HUMAN_RE = re.compile(r"\b(?:talk|speak|chat)\s+(?:to|with)\s+(?:a\s+)?(?:real\s+)?(?:person|human|someone|agent|manager|leasing agent)\b|\breal person\b", re.I)
+    r"yes please|yes,? book it|that'?s right|"
+    r"s[ií]|claro|vale|de acuerdo|perfecto|est[aá] bien|me parece bien|s[ií],? por favor|reserv[ae]la|ad[eé]lante)"
+    r"\s*[.!]?\s*(?:,?\s*(?:please|thanks|thank you|thx|por favor|gracias)\s*[.!]?)?\s*", re.I)
+_NO_RE = re.compile(r"^\s*(?:no|nope|nah|not that|wrong|actually|mejor no|en realidad)\b", re.I)
+_HUMAN_RE = re.compile(r"\b(?:talk|speak|chat)\s+(?:to|with)\s+(?:a\s+)?(?:real\s+)?(?:person|human|someone|agent|manager|leasing agent)\b|\breal person\b|"
+                       r"\b(?:hablar|comunicarme)\s+con\s+(?:una?\s+)?(?:persona|humano|agente|alguien|gerente|asesor)\b|\bpersona real\b", re.I)
 
 
 def _schedule(ctx) -> dict:
     return ctx["config"].get("schedule") or {}
 
 
+def _lang(ctx) -> str:
+    return ctx.get("lang") or "en"
+
+
+def _set_lang(ctx, lead, message) -> None:
+    """Decide the intake's language once, from the prospect's own words, then
+    keep it, so every prospect gets one language's fixed wording throughout."""
+    flags = dict(lead.flags or {})
+    lang = flags.get("lang")
+    if not lang:
+        lang = detect_lang(message)
+        if lang:
+            flags["lang"] = lang
+            lead.flags = flags
+    ctx["lang"] = lang or "en"
+
+
 def _sched_on(ctx) -> bool:
     return S.is_enabled(_schedule(ctx))
 
 
-def _kind(ctx) -> str:
-    return "call" if ctx["vertical"] == "seasonal" else "tour"
+def _kind(ctx, lang: str | None = "en") -> str:
+    return t("kind_call" if ctx["vertical"] == "seasonal" else "kind_tour", lang)
 
 
 def _offer(lead, ctx, lead_in: str = "", prefer_text: str | None = None) -> str | None:
@@ -151,7 +205,7 @@ def _offer(lead, ctx, lead_in: str = "", prefer_text: str | None = None) -> str 
     offer = offer or S.spread_offer(slots, sched)
     flags["offered"] = [s.isoformat() for s in offer]
     lead.flags = flags
-    return S.offer_text(offer, sched, _kind(ctx), lead_in)
+    return S.offer_text(offer, sched, _kind(ctx, _lang(ctx)), lead_in, lang=_lang(ctx))
 
 
 def _contact(lead) -> dict:
@@ -162,12 +216,13 @@ def _contact(lead) -> dict:
 
 def _booked_line(ctx, appt) -> str:
     sched = _schedule(ctx)
-    parts = [f"You're booked for a {_kind(ctx)} on {S.fmt_slot(appt.start_at, sched)}."]
+    lang = _lang(ctx)
+    parts = [t("booked", lang, kind=_kind(ctx, lang), when=S.fmt_slot(appt.start_at, sched, lang=lang))]
     if sched.get("details"):
         parts.append(sched["details"])
     if appt.email:
-        parts.append(f"A confirmation is on its way to {appt.email}.")
-    parts.append(f"Need to cancel? {notifier.appt_url(appt.cancel_token)}")
+        parts.append(t("booked_email", lang, email=appt.email))
+    parts.append(t("booked_cancel", lang, url=notifier.appt_url(appt.cancel_token)))
     return " ".join(parts)
 
 
@@ -199,11 +254,11 @@ def _try_book(lead, ctx, slot, prefix) -> str:
     existing = S.lead_booking(ctx["client_id"], lead.id)  # a parallel turn won
     if existing:
         return _finish_booked(lead, ctx, existing, prefix, fresh=False)
-    text = _offer(lead, ctx, lead_in="Sorry, that time was just taken. Here's what's still open:")
+    text = _offer(lead, ctx, lead_in=t("offer_taken", _lang(ctx)))
     return text or _no_slots(lead, ctx)
 
 
-def _stop_booking(lead, ctx, reply, reopened, answer):
+def _stop_booking(lead, ctx, reply, reopened, answer, ask_more=True):
     """Prospect isn't booking now. In reopen mode the finished lead stays as it was."""
     flags = dict(lead.flags or {})
     for k in ("offered", "confirm_slot", "booking_open", "tour_pref"):
@@ -218,7 +273,7 @@ def _stop_booking(lead, ctx, reply, reopened, answer):
         if prev:
             answers["tour_time"] = prev
         lead.answers = answers
-        return f"{reply} Is there anything else I can help with?"
+        return f"{reply} {t('anything_else_short', _lang(ctx))}" if ask_more else reply
     answers["tour_time"] = answer
     lead.answers = answers
     return _ask(lead, ctx, reply)
@@ -228,6 +283,7 @@ def _handle_booking(lead, ctx, message, history, history_summary, reopened=False
     """The prospect is answering a slot offer (during the intake, or after it
     when reopened=True; then the lead stays complete throughout)."""
     sched = _schedule(ctx)
+    lang = _lang(ctx)
     flags = dict(lead.flags or {})
     offered = [datetime.fromisoformat(x) for x in flags.get("offered", [])]
     lead.updated_at = _now()
@@ -250,11 +306,12 @@ def _handle_booking(lead, ctx, message, history, history_summary, reopened=False
         if _YES_RE.fullmatch(message):
             return _try_book(lead, ctx, datetime.fromisoformat(pending_slot), "")
         if _NO_RE.match(message) and not (S._parse_day(message, S.now_utc().date()) or S._parse_time(message)):
-            body = S.offer_text(offered, sched, _kind(ctx), "No problem. Here are the open times again:") if offered else (_offer(lead, ctx) or "")
+            body = (S.offer_text(offered, sched, _kind(ctx, lang), t("offer_again", lang), lang=lang)
+                    if offered else (_offer(lead, ctx) or ""))
             return body
 
     if _DECLINE_BOOKING_RE.match(message) or L.is_skip(message):
-        return _stop_booking(lead, ctx, "No problem, our team can set up a time with you.", reopened,
+        return _stop_booking(lead, ctx, t("decline_booking", lang), reopened,
                              "Didn't book online; team to follow up")
 
     prefix = ""
@@ -262,12 +319,12 @@ def _handle_booking(lead, ctx, message, history, history_summary, reopened=False
         flags = dict(lead.flags or {})
         flags["accommodation_request"] = True
         lead.flags = flags
-        prefix = L.ACCOMMODATION_REPLY
+        prefix = t("accommodation", lang)
         if not flags.get("accommodation_notified"):
             _maybe_notify(ctx, lead, completing=False)
 
     slots = S.open_slots(ctx["client_id"], sched)
-    choice = S.parse_choice(message, offered, slots, sched)
+    choice = S.parse_choice(message, offered, slots, sched, lang=lang)
 
     if choice and choice[0] == "slot":
         if choice[2]:
@@ -276,7 +333,7 @@ def _handle_booking(lead, ctx, message, history, history_summary, reopened=False
         flags["confirm_slot"] = choice[1].isoformat()
         lead.flags = flags
         lead.reask_count = 0
-        ask = f"Want me to book a {_kind(ctx)} on {S.fmt_slot(choice[1], sched)}? (yes / no)"
+        ask = t("confirm_slot", lang, kind=_kind(ctx, lang), when=S.fmt_slot(choice[1], sched, lang=lang))
         return f"{prefix}\n\n{ask}".strip()
 
     # A real question that also mentions a day ("Do you allow pets on Saturday?")
@@ -289,42 +346,40 @@ def _handle_booking(lead, ctx, message, history, history_summary, reopened=False
         flags["offered"] = [s.isoformat() for s in choice[1]]
         lead.flags = flags
         lead.reask_count = 0
-        body = S.offer_text(choice[1], sched, _kind(ctx), "Here's what's open:")
+        body = S.offer_text(choice[1], sched, _kind(ctx, lang), t("offer_choices", lang), lang=lang)
         return f"{prefix}\n\n{body}".strip()
 
     if choice and choice[0] == "unavailable":
         lead.reask_count = 0
-        when = f"on {choice[1]}" if choice[1] != "that time" else "then"
-        text = _offer(lead, ctx, lead_in=f"Nothing's open {when}. Here are the next open times:")
+        when = t("when_on", lang, day=choice[1]) if choice[1] != "that time" else t("when_then", lang)
+        text = _offer(lead, ctx, lead_in=t("offer_none_on", lang, when=when))
         return f"{prefix}\n\n{text or _no_slots(lead, ctx)}".strip()
 
-    current = S.offer_text(offered, sched, _kind(ctx)) if offered else (_offer(lead, ctx) or "")
+    current = S.offer_text(offered, sched, _kind(ctx, lang), lang=lang) if offered else (_offer(lead, ctx) or "")
     if _NONE_WORK_RE.search(message):
-        return ("No problem. Tell me a day and time that would work (like \"Thursday afternoon\" "
-                "or \"Saturday at 11am\") and I'll check.")
+        return t("none_work", lang)
     if "?" in message:
         side = _side_answer(ctx, message, history, history_summary)
         if reopened:
             lead.reask_count = (lead.reask_count or 0) + 1
             if lead.reask_count >= 2:  # they've moved on; stop offering times
-                return _stop_booking(lead, ctx, side, True, None).replace(" Is there anything else I can help with?", "")
+                return _stop_booking(lead, ctx, side, True, None, ask_more=False)
         return f"{side}\n\n{current}".strip()
     if prefix:
         return f"{prefix}\n\n{current}".strip()
 
     lead.reask_count = (lead.reask_count or 0) + 1
     if lead.reask_count >= 2:
-        return _stop_booking(lead, ctx, "No problem, I'll pass that along and our team will confirm a time with you.",
+        return _stop_booking(lead, ctx, t("booking_moved_on", lang),
                              reopened, f"Prefers: {message.strip()[:150]}")
-    return (REASK_PREFIX + "Reply with a number from the list, or tell me a day and time that works "
-            "(like \"Saturday at 11am\").")
+    return t("reask", lang) + t("booking_reask", lang)
 
 
 def _no_slots(lead, ctx) -> str:
     answers = dict(lead.answers or {})
     answers["tour_time"] = "No open times online; team to schedule"
     lead.answers = answers
-    return _ask(lead, ctx, "Our calendar is full online right now, so our team will reach out to find a time.")
+    return _ask(lead, ctx, t("calendar_full", _lang(ctx)))
 
 
 def _notify(ctx, lead, kind):
@@ -385,6 +440,14 @@ def _capture(lead, ctx, message: str, pending: str | None) -> dict:
     if "email" in open_keys and "email" in ext["answers"] and not email and "@" in ext["answers"]["email"]:
         answers.pop("email", None)
 
+    # A listed property picked by number or name wins over the model's reading.
+    if "property" in open_keys and ctx["config"].get("properties"):
+        picked = L.match_property(message, ctx["config"])
+        if picked and (pending == "property" or pending is None):
+            answers["property"] = picked
+        elif answers.get("property") and answers["property"] not in ctx["config"]["properties"]:
+            answers["property"] = L.match_property(answers["property"], ctx["config"]) or answers["property"]
+
     if L.detect_accommodation(message):
         flags = dict(lead.flags or {})
         flags["accommodation_request"] = True
@@ -418,12 +481,15 @@ def _side_answer(ctx, message, history, history_summary) -> str:
         "history": history,
         "client_id": ctx["client_id"],
         "vertical": ctx["vertical"],
+        "bot_name": ctx.get("bot_name", ""),
+        "business_name": ctx.get("business_name", ""),
+        "properties": ctx["config"].get("properties") or [],
         "extra_instructions": BRIEF_ANSWER_RULE,
     })
     text = (res.get("response_text") or "").strip()
     # Guardrail the model's free text here, before the fixed intake question is
     # appended, so a blocked answer never swallows the question.
-    safe, flagged = L.check_output(text)
+    safe, flagged = L.check_output(text, _lang(ctx))
     if flagged:
         logger.warning(f"Fair Housing filter replaced an intake side answer (client={ctx['client_id'][:8]} flagged={flagged})")
     return safe
@@ -438,7 +504,7 @@ def _ask(lead, ctx, prefix: str) -> str:
         lead.pending_key = None
         lead.completed_at = _now()
         _maybe_notify(ctx, lead, completing=True)
-        body = L.closing_message(lead.answers, ctx["config"], ctx["vertical"])
+        body = L.closing_message(lead.answers, ctx["config"], ctx["vertical"], _lang(ctx))
     elif nxt == "tour_time" and _sched_on(ctx):
         if not L.has_contact(lead.answers):
             answers = dict(lead.answers or {})
@@ -454,7 +520,7 @@ def _ask(lead, ctx, prefix: str) -> str:
     else:
         lead.pending_key = nxt
         _maybe_notify(ctx, lead, completing=False)
-        body = L.question_text(nxt, ctx["config"])
+        body = L.question_text(nxt, ctx["config"], _lang(ctx))
     return f"{prefix}\n\n{body}".strip() if prefix else body
 
 
@@ -534,6 +600,7 @@ def continue_turn(ctx, session_id, message, history, history_summary) -> dict | 
         lead = _load_detached(ctx["client_id"], session_id)
         if not lead or lead.status != "in_progress":
             return None
+        _set_lang(ctx, lead, message)
         pending = lead.pending_key
 
         if L.is_opt_out(message):
@@ -541,7 +608,7 @@ def continue_turn(ctx, session_id, message, history, history_summary) -> dict | 
             lead.pending_key = None
             lead.updated_at = _now()
             _save(lead)
-            return _result(OPT_OUT_REPLY, lead)
+            return _result(t("opt_out", _lang(ctx)), lead)
 
         if pending == "tour_time" and _sched_on(ctx):
             lead._ctx = ctx
@@ -568,11 +635,11 @@ def continue_turn(ctx, session_id, message, history, history_summary) -> dict | 
             lead.updated_at = _now()
             _maybe_notify(ctx, lead, completing=False)
             _save(lead)
-            return _result(OPT_OUT_REPLY, lead)
+            return _result(t("opt_out", _lang(ctx)), lead)
 
         answered = pending is None or pending in (lead.answers or {})
         if new_accommodation:
-            prefix = L.ACCOMMODATION_REPLY
+            prefix = t("accommodation", _lang(ctx))
             lead.reask_count = 0
         elif ext["asked_question"]:
             prefix = _side_answer(ctx, message, history, history_summary)
@@ -583,14 +650,15 @@ def continue_turn(ctx, session_id, message, history, history_summary) -> dict | 
                 answers[pending] = L.NOT_PROVIDED
                 lead.answers = answers
                 lead.reask_count = 0
-                prefix = "No worries, let's keep going."
+                prefix = t("keep_going", _lang(ctx))
             else:
                 lead.updated_at = _now()
                 _save(lead)
-                return _result(REASK_PREFIX + L.question_text(pending, ctx["config"]), lead)
+                return _result(t("reask", _lang(ctx)) + L.question_text(pending, ctx["config"], _lang(ctx)), lead)
         else:
             lead.reask_count = 0
-            prefix = ACKS[len(lead.answers or {}) % len(ACKS)]
+            acks = t("acks", _lang(ctx))
+            prefix = acks[len(lead.answers or {}) % len(acks)]
 
         text = _ask(lead, ctx, prefix)
         _save(lead)
@@ -611,12 +679,13 @@ def post_intake(ctx, session_id, message, lead=None) -> dict | None:
         if not lead or lead.status != "complete":
             return None
         lead._ctx = ctx
+        _set_lang(ctx, lead, message)
         flags = dict(lead.flags or {})
 
         # Mid-booking after the intake.
         if flags.get("booking_open") and _sched_on(ctx):
             if L.is_opt_out(message):
-                text = _stop_booking(lead, ctx, "No problem.", True, None)
+                text = _stop_booking(lead, ctx, t("no_problem", _lang(ctx)), True, None)
                 _save(lead)
                 return _result(text, lead)
             if _HUMAN_RE.search(message):
@@ -631,8 +700,8 @@ def post_intake(ctx, session_id, message, lead=None) -> dict | None:
 
         appt = S.lead_booking(ctx["client_id"], lead.id)
         if appt and _CHANGE_RE.search(message):
-            return _result(f"You're booked for {S.fmt_slot(appt.start_at, _schedule(ctx))}. You can cancel here: "
-                           f"{notifier.appt_url(appt.cancel_token)} and then I can help you pick a new time.", lead)
+            return _result(t("change_booking", _lang(ctx), when=S.fmt_slot(appt.start_at, _schedule(ctx), lang=_lang(ctx)),
+                             url=notifier.appt_url(appt.cancel_token)), lead)
         if (_sched_on(ctx) and not appt and L.has_contact(lead.answers) and _SCHEDULING_RE.search(message)):
             flags["prev_tour_time"] = (lead.answers or {}).get("tour_time")
             flags["booking_open"] = True
@@ -640,7 +709,7 @@ def post_intake(ctx, session_id, message, lead=None) -> dict | None:
             flags.pop("appointment_id", None)
             lead.flags = flags
             lead.reask_count = 0
-            offer = _offer(lead, ctx, lead_in=f"Sure! Here are the next open times for a {_kind(ctx)}:")
+            offer = _offer(lead, ctx, lead_in=t("offer_sure", _lang(ctx), kind=_kind(ctx, _lang(ctx))))
             if offer is None:
                 return None
             lead.updated_at = _now()
@@ -661,6 +730,7 @@ def start(ctx, session_id, message, history, history_summary) -> dict | None:
         if lead and lead.status == "complete":
             if not L.detect_accommodation(message):
                 return None
+            _set_lang(ctx, lead, message)
             # An accommodation request after the intake still goes to a person.
             flags = dict(lead.flags or {})
             first_time = not flags.get("accommodation_request")
@@ -670,22 +740,26 @@ def start(ctx, session_id, message, history, history_summary) -> dict | None:
             if first_time:
                 _maybe_notify(ctx, lead, completing=False)
             _save(lead)
-            return _result(L.ACCOMMODATION_REPLY + "\n\nIs there anything else I can help with?", lead)
+            return _result(t("accommodation", _lang(ctx)) + "\n\n" + t("anything_else_short", _lang(ctx)), lead)
         if lead is None:
             lead = _load_detached(ctx["client_id"], session_id, create=True)
+            flags = dict(lead.flags or {})
+            flags["after_hours"] = S.is_after_hours(_schedule(ctx))
+            lead.flags = flags
         if lead.status == "abandoned":
             lead.status = "in_progress"
+        _set_lang(ctx, lead, message)
 
         had_accommodation = bool((lead.flags or {}).get("accommodation_request"))
         _capture(lead, ctx, message, pending=None)
         new_accommodation = bool((lead.flags or {}).get("accommodation_request")) and not had_accommodation
 
         if new_accommodation:
-            prefix = L.ACCOMMODATION_REPLY
+            prefix = t("accommodation", _lang(ctx))
         else:
             prefix = _side_answer(ctx, message, history, history_summary)
         if L.next_question(lead.answers, ctx["config"]) is not None:
-            prefix = (prefix + "\n\n" if prefix else "") + L.intro_line(ctx["vertical"]).strip()
+            prefix = (prefix + "\n\n" if prefix else "") + L.intro_line(ctx["vertical"], _lang(ctx)).strip()
 
         text = _ask(lead, ctx, prefix)
         _save(lead)
@@ -728,11 +802,14 @@ def on_appointment_canceled(appt, by: str) -> None:
                 db.commit()
         finally:
             db.close()
+    if _is_demo(ctx):
+        return
     to_email, _ = _alert_targets(ctx)
     notifier.send_appointment_emails(
         "canceled_by_prospect" if by == "prospect" else "canceled_by_owner",
         business_name=ctx["business_name"], owner_email=to_email, appt=S.appt_to_dict(appt, sched),
-        details=sched.get("details", ""), manage_url=notifier.appt_url(appt.cancel_token))
+        details=sched.get("details", ""), manage_url=notifier.appt_url(appt.cancel_token),
+        lang=_lead_lang(appt.client_id, appt.lead_id))
 
 
 def send_due_reminders() -> int:
@@ -747,12 +824,15 @@ def send_due_reminders() -> int:
             ctx = load_client_context(appt.client_id)
             if not ctx or not appt.email or not S.claim_reminder(db, appt.id):
                 continue
+            if _is_demo(ctx):
+                continue
             sched = _schedule(ctx)
             to_email, _ = _alert_targets(ctx)
             notifier.send_appointment_emails(
                 "reminder", business_name=ctx["business_name"], owner_email=to_email,
                 appt=S.appt_to_dict(appt, sched), details=sched.get("details", ""),
-                manage_url=notifier.appt_url(appt.cancel_token))
+                manage_url=notifier.appt_url(appt.cancel_token),
+                lang=_lead_lang(appt.client_id, appt.lead_id))
             sent += 1
     except Exception as e:
         db.rollback()
@@ -760,6 +840,21 @@ def send_due_reminders() -> int:
     finally:
         db.close()
     return sent
+
+
+# ── Current residents ───────────────────────────────────────────────────────
+def resident_note(ctx, message: str) -> str:
+    """Fixed lines added to any reply to a current resident: the owner's
+    office / maintenance contact, and a 911 line for emergencies. Residents are
+    never put through the leasing intake and never become leads."""
+    lang = detect_lang(message) or "en"
+    parts = []
+    if is_emergency(message):
+        parts.append(t("emergency", lang))
+    contact = (ctx["config"].get("resident_contact") or "").strip() if ctx else ""
+    if contact:
+        parts.append(t("resident_contact", lang, contact=contact))
+    return "\n\n".join(parts)
 
 
 # ── Partial-lead sweep ──────────────────────────────────────────────────────

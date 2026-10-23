@@ -205,7 +205,7 @@
   <nav class="header-nav">
     <a href="/admin">← Hub</a>
     <a href="/admin/kb">Knowledge Base</a>
-    <a href="/">Chat</a>
+    <a href="/">Site</a>
     <a href="/admin/logout">Sign Out</a>
   </nav>
 </header>
@@ -251,7 +251,7 @@
         </div>
         <div class="form-group">
           <label>Bot Name</label>
-          <input type="text" id="botName" placeholder="e.g. Magni (or their custom name)"/>
+          <input type="text" id="botName" placeholder="e.g. Leasing Assistant (or their custom name)"/>
         </div>
         <div class="form-group">
           <label>Billing Date (next renewal)</label>
@@ -343,7 +343,7 @@
             <span class="badge badge-${c.status}">${c.status}</span>
           </div>
         </div>
-        <div class="client-email">📧 ${escapeHtml(c.email)} &nbsp;·&nbsp; 🤖 ${escapeHtml(c.bot_name || 'Magni')}</div>
+        <div class="client-email">📧 ${escapeHtml(c.email)} &nbsp;·&nbsp; 🤖 ${escapeHtml(c.bot_name || 'Leasing Assistant')}</div>
         <div class="client-usage">
           Conversations: ${used.toLocaleString()} / ${limit > 0 ? limit.toLocaleString() : '∞'} (${pct}%)
           <div class="usage-bar"><div class="usage-fill ${warning ? 'warning' : ''}" style="width:${pct}%"></div></div>
@@ -365,7 +365,7 @@
     const businessName = document.getElementById('businessName').value.trim();
     const email = document.getElementById('clientEmail').value.trim();
     const tier = document.getElementById('clientTier').value;
-    const botName = document.getElementById('botName').value.trim() || 'Magni';
+    const botName = document.getElementById('botName').value.trim() || 'Leasing Assistant';
     const billingDate = document.getElementById('billingDate').value;
     const notes = document.getElementById('clientNotes').value.trim();
 

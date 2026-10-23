@@ -141,6 +141,54 @@ def leads_csv(client_id: str) -> str:
         db.close()
 
 
+def leasing_metrics(client_id: str, days: int = 30) -> dict:
+    """The numbers an owner pays for, over the last `days` days: chats, leads
+    (finished and partial), accommodation requests, and tours booked or
+    canceled. Tenant-scoped like everything here."""
+    from core.models import Conversation, Appointment
+    now = _now()
+    since = now - timedelta(days=days)
+
+    def recent(dt):
+        if dt is None:
+            return False
+        return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)) >= since
+
+    db = SessionLocal()
+    try:
+        convs = db.query(Conversation.started_at).filter(Conversation.client_id == client_id).all()
+        leads = db.query(Lead).filter(Lead.client_id == client_id).all()
+        appts = db.query(Appointment).filter(Appointment.client_id == client_id).all()
+    finally:
+        db.close()
+
+    conversations = sum(1 for (t,) in convs if recent(t))
+    leads_recent = [l for l in leads if recent(l.created_at) and (l.answers or l.flags)]
+    complete = sum(1 for l in leads_recent if l.status == "complete")
+    partial = sum(1 for l in leads_recent if l.status != "complete" and (l.contact_phone or l.contact_email))
+    after_hours = sum(1 for l in leads_recent if (l.flags or {}).get("after_hours"))
+    accommodation = sum(1 for l in leads_recent if (l.flags or {}).get("accommodation_request"))
+    appts_recent = [a for a in appts if recent(a.created_at)]
+    upcoming = 0
+    for a in appts:
+        start = a.start_at if a.start_at.tzinfo else a.start_at.replace(tzinfo=timezone.utc)
+        if a.status == "booked" and start > now:
+            upcoming += 1
+    return {
+        "days": days,
+        "conversations": conversations,
+        "conversations_all_time": len(convs),
+        "leads_complete": complete,
+        "leads_partial": partial,
+        "leads_after_hours": after_hours,
+        "accommodation_requests": accommodation,
+        "tours_booked": sum(1 for a in appts_recent),
+        "tours_canceled": sum(1 for a in appts_recent if a.status == "canceled"),
+        "tours_upcoming": upcoming,
+        "lead_rate": round(100 * (complete + partial) / conversations) if conversations else 0,
+    }
+
+
 def stale_partial_leads(db, older_than_minutes: int = PARTIAL_AFTER_MINUTES):
     """In-progress leads with a way to reach the prospect that went quiet and
     were never announced to the owner, oldest first."""

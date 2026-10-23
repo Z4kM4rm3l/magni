@@ -47,13 +47,11 @@ store.start_conversation("client_a", SID)  # client_a owns it
 # Durable store: client_b must not be able to touch client_a's conversation.
 check("B cannot claim A's session", store.start_conversation("client_b", SID) == {})
 check("B cannot append to A's conversation", store.add_message_to_conversation("client_b", SID, "user", "hi") is False)
-check("B cannot resolve A's conversation", store.set_resolution("client_b", SID, True) == {})
-check("B cannot rate A's conversation", store.set_rating("client_b", SID, 5) is False)
 
 # client_a can operate on its own conversation.
 check("A can append to its conversation", store.add_message_to_conversation("client_a", SID, "user", "thanks that helped") is True)
-check("A can resolve its conversation", store.set_resolution("client_a", SID, True).get("resolved") is True)
-check("A can rate its conversation", store.set_rating("client_a", SID, 5, "great") is True)
+check("B's list doesn't include A's conversation", all(c["session_id"] != SID for c in store.get_all_conversations("client_b")))
+check("A's list includes its conversation", any(c["session_id"] == SID for c in store.get_all_conversations("client_a")))
 
 # In-memory manager: same session_id under different tenants must NOT share history.
 mgr = ConversationManager()

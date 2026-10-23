@@ -57,7 +57,9 @@ Prospects who give a phone or email and then stop replying get sent to the owner
 - **Settings → Cron Schedule:** `*/10 * * * *` (UTC; Railway's minimum is 5 minutes)
 - **Variables:** `DATABASE_URL`, `MAGNI_SMTP_FROM`, `MAGNI_SMTP_PASSWORD`, `PUBLIC_BASE_URL` (and the Twilio ones once SMS is approved)
 
-Optional: a daily cron service for `python scripts/reset_monthly_usage.py` (e.g. `0 9 * * *`) with `DATABASE_URL` and `STRIPE_SECRET_KEY`, which resets monthly message counts.
+Optional: a daily cron service for `python scripts/reset_monthly_usage.py` (e.g. `0 9 * * *`) with `DATABASE_URL` and `STRIPE_SECRET_KEY`. It resets monthly conversation counts for paying accounts at each Stripe renewal and for operator-managed accounts on every run; trials are never reset.
+
+**Landing-page demo.** Run `python scripts/create_demo_client.py` once from the Railway shell (needs `PUBLIC_BASE_URL`). It creates a sample apartment community that the widget on `/` uses. Then add a daily cron service for `python scripts/reset_demo_daily.py` (e.g. `0 5 * * *`) with `DATABASE_URL`, which clears the demo's usage, leads and bookings. The demo never sends emails or texts.
 
 The web service's **Start Command** should be `gunicorn --workers 1 --threads 8 --timeout 120 app:app` (already set in `railway.json` and `Procfile`). Keep one worker and one replica: the login lockout, rate limits and global cap live in that process's memory.
 
@@ -66,15 +68,17 @@ The web service's **Start Command** should be `gunicorn --workers 1 --threads 8 
 0. Optional live model check from your Codespace with `ANTHROPIC_API_KEY` set: `python tests/test_triage_agent.py` and `python tests/test_resolver_agent.py` call the real Claude API.
 
 1. Sign up at `/signup`. The portal should say **Free trial: 14 days left**.
-2. **Leasing assistant** card: set Business type to *Long-term rentals*, add posted criteria, an application link, and your own email/phone for alerts. Save.
+2. **Leasing assistant** card: set Business type to *Long-term rentals*, add posted criteria, an application link, two property names (one per line), a resident contact line, and your own email/phone for alerts. Save.
 3. **Knowledge base**: use a suggested article (for example *Available units and pricing*) and add one real unit with a price.
 4. **Install**: paste the embed snippet into a test page, and add that page's domain under Appearance → Allowed website domains. The widget refuses to answer on any site that isn't listed (add both `example.com` and `www.example.com` if the site uses both).
 5. **Online booking**: in the Leasing assistant card, tick *Let prospects book a time right in the chat*, set your hours and where to meet, and save.
 6. Chat as a prospect: "Is the 2 bedroom available? Could I tour Saturday?" Answer the questions, then pick a time from the list (reply with a number, or say "Saturday at 11"). You should get the lead alert with a calendar invite, the prospect email should get a confirmation with an invite and a cancel link, and the booking should show under **Appointments**.
 7. Open the cancel link from the confirmation email and cancel. You should get a cancellation email, and the time should be open again.
-8. In a new chat, say "I have an emotional support dog." The assistant should not quote pet rules, and the lead should be flagged as an accommodation request.
-9. **Choose Starter** → pay with card `4242 4242 4242 4242`. Back in the portal it should still show the trial (first charge happens when the trial ends). In Stripe, the subscription should show as *trialing*.
-10. **Manage billing** should open the Stripe customer portal. Cancel there, and within a few seconds the portal should say *Your subscription has ended*, and the widget should reply with the neutral "unavailable" message.
+8. In a new chat, write in Spanish: "Hola, ¿tienen apartamentos disponibles?" Every question and the booking times should come back in Spanish, the confirmation email should be in Spanish, and the lead should be tagged *Spanish*.
+9. As a current resident: "My sink is leaking." The reply should include the resident contact you entered, and no lead should appear.
+10. In a new chat, say "I have an emotional support dog." The assistant should not quote pet rules, and the lead should be flagged as an accommodation request.
+11. **Choose Starter** → pay with card `4242 4242 4242 4242`. Back in the portal it should still show the trial (first charge happens when the trial ends). In Stripe, the subscription should show as *trialing*.
+12. **Manage billing** should open the Stripe customer portal. Cancel there, and within a few seconds the portal should say *Your subscription has ended*, and the widget should reply with the neutral "unavailable" message.
 
 ## 7. Before your first real customer
 

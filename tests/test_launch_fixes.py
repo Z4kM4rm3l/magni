@@ -1,7 +1,7 @@
 """Launch-blocker regression tests: usage counted per conversation, trials never
-reset early, customer keys only work through the widget, the demo fails closed,
-the admin lockout can't be dodged with a forged header, the assistant uses the
-owner's bot and business name, and deleting a client stops its Stripe billing.
+reset early, customer keys only work through the widget, the admin lockout
+can't be dodged with a forged header, the assistant uses the owner's bot and
+business name, and deleting a client stops its Stripe billing.
 Run: python tests/test_launch_fixes.py
 """
 import os, sys, time
@@ -110,21 +110,17 @@ check("reset leaves an ended trial's usage alone", used("c-ended") == 1000)
 check("reset still resets operator-managed accounts", used("c-managed") == 0)
 check("reset skips the demo account", True)
 
-# --- Customer keys only work through the widget ---
-r = w.post("/chat", json={"message": "hi"}, headers={"X-Magni-API-Key": "k-palm"})
-check("/chat refuses a customer key (403)", r.status_code == 403)
-before = used("c-palm")
-check("/chat with a customer key spends nothing", used("c-palm") == before)
+# --- The old public chat routes are gone; customer keys only work in the widget ---
+for path in ("/chat", "/resolve", "/feedback", "/reset"):
+    r = w.post(path, json={"message": "hi", "session_id": "x", "resolved": True, "rating": 5},
+               headers={"X-Magni-API-Key": "k-palm"})
+    check(f"{path} no longer exists", r.status_code in (404, 405))
 
-# --- Demo fails closed when the database is down ---
-real = appmod.SessionLocal
-def _down():
-    raise RuntimeError("db down")
-appmod.SessionLocal = _down
-r = w.post("/chat", json={"message": "hi"})
-appmod.SessionLocal = real
-check("demo chat answers with the paused message when the DB is down",
-      "paused" in (r.get_json() or {}).get("response", ""))
+r = w.get("/")
+page = r.get_data(as_text=True)
+check("landing page loads and embeds the demo widget", r.status_code == 200 and "/widget/magni.js" in page
+      and 'data-api-key="sk_magni_demo_public_2026"' in page)
+check("landing page is about rentals", "property managers" in page.lower() and "shipment" not in page.lower())
 
 # --- Admin lockout can't be dodged by forging X-Forwarded-For ---
 from core import auth as auth_mod

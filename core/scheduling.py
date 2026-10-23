@@ -228,6 +228,28 @@ def spread_offer(slots: list[datetime], schedule: dict, n: int = OFFER_COUNT) ->
     return out
 
 
+_DAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def is_after_hours(schedule: dict, when: datetime | None = None) -> bool:
+    """True when `when` falls outside the owner's weekly hours (or on a day
+    off), in the owner's time zone. Uses the hours whether or not online
+    booking is on; they default to weekdays 9-5 and Saturday 10-2."""
+    sched = schedule or DEFAULT_SCHEDULE
+    try:
+        tz = ZoneInfo(sched.get("timezone") or DEFAULT_SCHEDULE["timezone"])
+    except (ZoneInfoNotFoundError, ValueError):
+        tz = ZoneInfo(DEFAULT_SCHEDULE["timezone"])
+    local = _aware(when or now_utc()).astimezone(tz)
+    if local.date().isoformat() in (sched.get("blocked_dates") or []):
+        return True
+    window = (sched.get("hours") or DEFAULT_SCHEDULE["hours"]).get(_DAY_KEYS[local.weekday()])
+    if not window:
+        return True
+    hhmm = local.strftime("%H:%M")
+    return not (window[0] <= hhmm < window[1])
+
+
 def tz_label(schedule: dict) -> str:
     tz = schedule.get("timezone", "America/New_York")
     return {"America/New_York": "ET", "America/Chicago": "CT", "America/Denver": "MT",
@@ -235,46 +257,63 @@ def tz_label(schedule: dict) -> str:
             "Pacific/Honolulu": "HT"}.get(tz, tz)
 
 
-def fmt_slot(dt: datetime, schedule: dict, with_tz: bool = True) -> str:
+def fmt_slot(dt: datetime, schedule: dict, with_tz: bool = True, lang: str = "en") -> str:
     local = _aware(dt).astimezone(ZoneInfo(schedule["timezone"]))
     hour = local.strftime("%I").lstrip("0") or "12"
-    s = f"{local.strftime('%a, %b')} {local.day} at {hour}:{local.strftime('%M %p')}"
+    if lang == "es":
+        from core.i18n import ES_DAYS, ES_MONTHS
+        ampm = "a. m." if local.hour < 12 else "p. m."
+        s = f"{ES_DAYS[local.weekday()]}, {local.day} {ES_MONTHS[local.month - 1]} a las {hour}:{local.strftime('%M')} {ampm}"
+    else:
+        s = f"{local.strftime('%a, %b')} {local.day} at {hour}:{local.strftime('%M %p')}"
     return f"{s} {tz_label(schedule)}" if with_tz else s
 
 
-def offer_text(offer: list[datetime], schedule: dict, kind: str, lead_in: str = "") -> str:
-    lines = [lead_in or f"Here are the next open times for a {kind}:"]
+def offer_text(offer: list[datetime], schedule: dict, kind: str, lead_in: str = "", lang: str = "en") -> str:
+    from core.i18n import t
+    lines = [lead_in or t("offer_lead_in", lang, kind=kind)]
     for i, s in enumerate(offer, 1):
-        lines.append(f"{i}. {fmt_slot(s, schedule, with_tz=False)}")
-    lines.append(f"Reply with a number, or tell me a day and time that works better. (Times are {tz_label(schedule)}.)")
+        lines.append(f"{i}. {fmt_slot(s, schedule, with_tz=False, lang=lang)}")
+    lines.append(t("offer_footer", lang, tz=tz_label(schedule)))
     return "\n".join(lines)
 
 
 # ── Understanding the prospect's pick ───────────────────────────────────────
 _ORDINALS = {"first": 1, "1st": 1, "second": 2, "2nd": 2, "third": 3, "3rd": 3,
              "fourth": 4, "4th": 4, "fifth": 5, "5th": 5, "one": 1, "two": 2,
-             "three": 3, "four": 4, "five": 5, "last": -1}
+             "three": 3, "four": 4, "five": 5, "last": -1,
+             "primero": 1, "primera": 1, "segundo": 2, "segunda": 2, "tercero": 3, "tercera": 3,
+             "cuarto": 4, "cuarta": 4, "quinto": 5, "quinta": 5, "uno": 1, "una": 1, "dos": 2,
+             "tres": 3, "cuatro": 4, "cinco": 5, "último": -1, "ultimo": -1, "última": -1, "ultima": -1}
 _WEEKDAYS = {"mon": 0, "monday": 0, "tue": 1, "tues": 1, "tuesday": 1, "wed": 2, "weds": 2,
              "wednesday": 2, "thu": 3, "thur": 3, "thurs": 3, "thursday": 3, "fri": 4, "friday": 4,
-             "sat": 5, "saturday": 5, "sun": 6, "sunday": 6}
+             "sat": 5, "saturday": 5, "sun": 6, "sunday": 6,
+             "lunes": 0, "martes": 1, "miércoles": 2, "miercoles": 2, "jueves": 3, "viernes": 4,
+             "sábado": 5, "sabado": 5, "domingo": 6}
 _MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug",
                                          "sep", "oct", "nov", "dec"], 1)}
-_TIME_RE = re.compile(r"\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?(?=\s|$|[.,!?])", re.I)
+_ES_MONTHS = {m: i for i, m in enumerate(["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago",
+                                            "sep", "oct", "nov", "dic"], 1)}
+_TIME_RE = re.compile(r"\b(?:at\s+|a\s+las?\s+)?(\d{1,2})(?::(\d{2}))?\s*(a\.?\s?m\.?|p\.?\s?m\.?)?(?=\s|$|[.,!?])", re.I)
 
 
 _PICK_DIGIT_RE = re.compile(
     r"(?:(?:option|number|no\.?)\s*|#\s*)?(\d)\s*[.!)]?"
     r"(?:\s*(?:please|pls|works|is good|sounds good|works for me|thanks|thank you)[.!]?)?")
 _PICK_WORD_RE = re.compile(
-    r"(?:(?:i'?ll take|let'?s do|i'?d like|go with)\s+)?(?:the\s+)?"
-    r"(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|last|one|two|three|four|five)"
-    r"(?:\s+(?:one|option|time|slot))?(?:\s*(?:please|pls|works|is good|sounds good))?[.!]?")
+    r"(?:(?:i'?ll take|let'?s do|i'?d like|go with|quiero|prefiero|me quedo con)\s+)?(?:the\s+|el\s+|la\s+)?"
+    r"(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|last|one|two|three|four|five|"
+    r"primero|primera|segundo|segunda|tercero|tercera|cuarto|cuarta|quinto|quinta|"
+    r"[uú]ltimo|[uú]ltima|uno|una|dos|tres|cuatro|cinco)"
+    r"(?:\s+(?:one|option|time|slot|opci[oó]n|horario))?(?:\s*(?:please|pls|works|is good|sounds good|por favor|gracias))?[.!]?")
 
 
 def _pick_number(text: str, n_offered: int) -> int | None:
     """Only a reply that is JUST a pick counts ("2", "#3 please", "the first one").
     Sentences that merely contain a number ("I have two dogs") never do."""
     t = " ".join(text.strip().lower().split())
+    t = re.sub(r"^(?:el|la|opci[oó]n|n[uú]mero)\s+", "", t)
+    t = re.sub(r"\s*(?:por favor|gracias)[.!]?$", "", t)
     m = _PICK_DIGIT_RE.fullmatch(t)
     if m:
         k = int(m.group(1))
@@ -293,6 +332,16 @@ def _parse_day(text: str, today: date) -> date | None:
         return today
     if re.search(r"\btomorrow\b", t):
         return today + timedelta(days=1)
+    if re.search(r"\bhoy\b", t):
+        return today
+    if re.search(r"\bpasado mañana\b", t):
+        return today + timedelta(days=2)
+    # "mañana" alone is tomorrow; "por la mañana" / "en la mañana" is a part of day.
+    if re.search(r"(?<!la )\bmañana\b", t):
+        return today + timedelta(days=1)
+    m = re.search(r"\b(\d{1,2})\s+de\s+(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)[a-z]*\b", t)
+    if m:
+        return _next_date(today, _ES_MONTHS[m.group(2)], int(m.group(1)))
     m = re.search(r"\b(\d{1,2})/(\d{1,2})(?:/\d{2,4})?\b", t)
     if m:
         mo, dy = int(m.group(1)), int(m.group(2))
@@ -303,7 +352,7 @@ def _parse_day(text: str, today: date) -> date | None:
     for word, wd in _WEEKDAYS.items():
         if re.search(rf"\b{word}\b", t):
             delta = (wd - today.weekday()) % 7
-            if re.search(rf"\bnext\s+{word}\b", t) and delta == 0:
+            if re.search(rf"\b(?:next\s+{word}|{word}\s+(?:que viene|pr[oó]ximo))\b", t) and delta == 0:
                 delta = 7
             return today + timedelta(days=delta)
     return None
@@ -321,26 +370,30 @@ def _next_date(today: date, mo: int, dy: int) -> date | None:
 
 
 # Words that may follow a bare "at 3" when it really is a time.
-_AFTER_BARE_TIME = r"(?:$|[.,!?]|\s+(?:on|this|next|tomorrow|today|please|works|ok|okay|or|and|if|then|work|good|in the)\b|\s+(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\b)"
+_AFTER_BARE_TIME = (r"(?:$|[.,!?]|\s+(?:on|this|next|tomorrow|today|please|works|ok|okay|or|and|if|then|work|good|in the"
+                    r"|el|este|esta|mañana|hoy|por favor|o|y|si|est[aá] bien|me sirve)\b"
+                    r"|\s+(?:mon|tue|wed|thu|fri|sat|sun|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)[a-z]*\b)")
 
 
 def _parse_time(text: str):
     """Returns ("exact", time, explicit) | ("window", (start_h, end_h), False) | None.
     explicit means am/pm, a colon, or "noon": an unambiguous clock time."""
     t = text.lower()
-    if re.search(r"\bnoon\b", t):
+    if re.search(r"\bnoon\b|\bmediod[ií]a\b", t):
         return ("exact", time(12, 0), True)
+    t = re.sub(r"\b(\d{1,2})(?::(\d{2}))?\s+de la (mañana|tarde|noche)\b",
+               lambda m: f"{m.group(1)}{':' + m.group(2) if m.group(2) else ''} {'am' if m.group(3) == 'mañana' else 'pm'}", t)
     for m in _TIME_RE.finditer(t):
         h = int(m.group(1))
         mins = int(m.group(2) or 0)
-        ap = (m.group(3) or "").replace(".", "")
+        ap = (m.group(3) or "").replace(".", "").replace(" ", "")
         if h > 12 or mins > 59 or (h == 0 and not ap):
             continue
         explicit = bool(ap) or m.group(2) is not None
         if not explicit:
             # A bare number is a time only as "at 3" followed by nothing that
             # makes it an address ("at 11 Palm St") or a count.
-            if not m.group(0).strip().startswith("at"):
+            if not re.match(r"(?:at|a las?)\b", m.group(0).strip()):
                 continue
             if not re.match(_AFTER_BARE_TIME, t[m.end():]):
                 continue
@@ -351,17 +404,17 @@ def _parse_time(text: str):
         elif not ap and 1 <= h <= 7:
             h += 12  # "at 3" in a showing context means 3 PM
         return ("exact", time(h, mins), explicit)
-    if re.search(r"\bmorning\b", t):
+    if re.search(r"\bmorning\b|\b(?:por|en) la mañana\b", t):
         return ("window", (0, 12), False)
-    if re.search(r"\bafternoon\b", t):
+    if re.search(r"\bafternoon\b|\b(?:por|en) la tarde\b", t):
         return ("window", (12, 17), False)
-    if re.search(r"\bevening\b|\bafter work\b", t):
+    if re.search(r"\bevening\b|\bafter work\b|\b(?:por|en) la noche\b|despu[eé]s del trabajo", t):
         return ("window", (17, 24), False)
     return None
 
 
 def parse_choice(message: str, offered: list[datetime], slots: list[datetime], schedule: dict,
-                 now: datetime | None = None):
+                 now: datetime | None = None, lang: str = "en"):
     """Map a reply to a slot. Returns one of:
       ("slot", dt, sure)      a specific open slot; sure=False means confirm first
       ("choices", [dt...])    several candidates to offer (a day, a part of day)
@@ -401,8 +454,12 @@ def parse_choice(message: str, offered: list[datetime], slots: list[datetime], s
         cands = [s for s in cands if lo <= s.astimezone(tz).hour < hi]
     if cands:
         return ("choices", cands[:OFFER_COUNT] if day is not None else spread_offer(cands, schedule))
-    label = day.strftime("%A, %b ") + str(day.day) if day else "that time"
-    return ("unavailable", label)
+    if not day:
+        return ("unavailable", "that time")
+    if lang == "es":
+        from core.i18n import ES_DAYS_LONG, ES_MONTHS
+        return ("unavailable", f"{ES_DAYS_LONG[day.weekday()]} {day.day} {ES_MONTHS[day.month - 1]}")
+    return ("unavailable", day.strftime("%A, %b ") + str(day.day))
 
 
 # ── Booking ─────────────────────────────────────────────────────────────────
@@ -439,7 +496,8 @@ def appt_to_dict(a: Appointment, schedule: dict) -> dict:
     return {
         "id": a.id, "lead_id": a.lead_id, "status": a.status,
         "start_at": _aware(a.start_at).isoformat(), "end_at": _aware(a.end_at).isoformat(),
-        "when": fmt_slot(a.start_at, schedule), "name": a.name or "", "email": a.email or "",
+        "when": fmt_slot(a.start_at, schedule), "when_es": fmt_slot(a.start_at, schedule, lang="es"),
+        "name": a.name or "", "email": a.email or "",
         "phone": a.phone or "", "property": a.property or "", "canceled_by": a.canceled_by,
     }
 

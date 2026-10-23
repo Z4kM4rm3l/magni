@@ -25,10 +25,9 @@
       };
     })();
   </script>
-  <title>Magni — Analytics</title>
+  <title>Magni Admin: Leasing analytics</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -241,373 +240,60 @@
     <a href="/admin">← Hub</a>
     <a href="/admin/kb">Knowledge Base</a>
     <a href="/admin/clients">Clients</a>
-    <a href="/">Chat</a>
+    <a href="/">Site</a>
     <a href="/admin/logout">Sign Out</a>
   </nav>
 </header>
 
-<div class="container">
-  <div class="page-title">Analytics Dashboard</div>
-  <p class="page-subtitle">Real-time insights into customer conversations, resolution rates, and satisfaction.</p>
+<main class="container">
+  <h1 class="page-title">Leasing analytics</h1>
+  <p class="page-subtitle">Chats, leads and tours for one client over the last 30 days.</p>
 
-  <!-- CLIENT SELECTOR -->
-  <div class="client-selector" style="margin:0 0 1.5rem; display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
-    <label for="clientSelect" style="font-weight:600; font-size:0.9rem;">Analytics for:</label>
-    <select id="clientSelect" onchange="onClientChange()" style="padding:0.5rem 0.75rem; border-radius:8px; min-width:220px;">
-      <option value="">Loading clients...</option>
-    </select>
+  <div style="margin:1rem 0 1.5rem">
+    <label for="clientSelect" style="font-size:0.85rem;color:var(--text-dim)">Client</label>
+    <select id="clientSelect" onchange="onClientChange()" style="margin-left:0.5rem;padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border)"><option>Loading...</option></select>
   </div>
 
-  <!-- TIME FILTER -->
-  <div class="time-filter">
-    <button class="filter-btn" onclick="setFilter('today')">Today</button>
-    <button class="filter-btn active" onclick="setFilter('week')">This Week</button>
-    <button class="filter-btn" onclick="setFilter('month')">This Month</button>
-  </div>
-
-  <!-- KPI CARDS -->
-  <div class="kpi-grid">
-    <div class="kpi-card amber">
-      <div class="kpi-label">Total Conversations</div>
-      <div class="kpi-value amber" id="kpiTotal">—</div>
-      <div class="kpi-sub" id="kpiTotalSub">Loading...</div>
-    </div>
-    <div class="kpi-card green">
-      <div class="kpi-label">Resolution Rate</div>
-      <div class="kpi-value green" id="kpiResolution">—</div>
-      <div class="kpi-sub">First contact resolution</div>
-    </div>
-    <div class="kpi-card purple">
-      <div class="kpi-label">Avg. Satisfaction</div>
-      <div class="kpi-value purple" id="kpiSatisfaction">—</div>
-      <div class="kpi-sub">Out of 5 stars</div>
-    </div>
-    <div class="kpi-card amber">
-      <div class="kpi-label">Avg. Messages</div>
-      <div class="kpi-value" id="kpiMessages">—</div>
-      <div class="kpi-sub">Per conversation</div>
-    </div>
-  </div>
-
-  <!-- CHARTS -->
-  <div class="charts-grid">
-    <div class="chart-card">
-      <div class="chart-title">Top Reasons for Contact</div>
-      <div class="chart-container">
-        <canvas id="intentChart"></canvas>
-      </div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Busiest Hours of the Day</div>
-      <div class="chart-container">
-        <canvas id="hourlyChart"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <!-- AI INSIGHTS -->
-  <div class="insights-card">
-    <div class="insights-header">
-      <div class="insights-title">🧠 AI-Generated Insights & Suggestions</div>
-      <span class="insights-badge">Powered by Claude</span>
-    </div>
-    <div id="insightsContent">
-      <div class="insights-loading">
-        <div class="insights-spinner"></div>
-        Analyzing conversation patterns...
-      </div>
-    </div>
-  </div>
-
-  <!-- FEEDBACK + UNRESOLVED -->
-  <div class="bottom-grid">
-    <div class="section-card">
-      <div class="section-title">Recent Customer Feedback</div>
-      <div id="feedbackList">
-        <div class="empty-state">Loading feedback...</div>
-      </div>
-    </div>
-    <div class="section-card">
-      <div class="section-title">Unresolved Conversations</div>
-      <div id="unresolvedList">
-        <div class="empty-state">Loading...</div>
-      </div>
-    </div>
-  </div>
-
-</div>
+  <div class="kpi-grid" id="kpis"></div>
+</main>
 
 <script>
-  let analyticsData = null;
-  let currentFilter = 'week';
-  let intentChart = null;
-  let hourlyChart = null;
-
-  const INTENT_COLORS = {
-    billing: '#d4810a',
-    technical: '#6366f1',
-    orders: '#38a169',
-    product: '#0ea5e9',
-    feedback: '#ec4899',
-    general: '#9b9b9b'
-  };
-
+  function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   let currentClientId = null;
 
   async function loadClients() {
+    const sel = document.getElementById('clientSelect');
     try {
       const res = await fetch('/api/clients');
-      const data = await res.json();
-      const clients = data.clients || [];
-      const sel = document.getElementById('clientSelect');
-      if (clients.length === 0) {
-        sel.innerHTML = '<option value="">No clients found</option>';
-        return;
-      }
-      sel.innerHTML = clients
-        .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.business_name || c.id)}</option>`)
-        .join('');
+      const clients = (await res.json()).clients || [];
+      if (!clients.length) { sel.innerHTML = '<option value="">No clients found</option>'; return; }
+      sel.innerHTML = clients.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.business_name || c.id)}</option>`).join('');
       currentClientId = sel.value;
-      await loadAnalytics();
-    } catch (e) {
-      const sel = document.getElementById('clientSelect');
-      if (sel) sel.innerHTML = '<option value="">Could not load clients</option>';
-    }
+      loadAnalytics();
+    } catch (e) { sel.innerHTML = '<option value="">Could not load clients</option>'; }
   }
 
-  function onClientChange() {
-    currentClientId = document.getElementById('clientSelect').value;
-    loadAnalytics();
+  function onClientChange() { currentClientId = document.getElementById('clientSelect').value; loadAnalytics(); }
+
+  function kpi(label, value, sub) {
+    return `<div class="kpi-card"><div class="kpi-label">${escapeHtml(label)}</div><div class="kpi-value">${escapeHtml(value)}</div>${sub ? `<div class="kpi-sub">${escapeHtml(sub)}</div>` : ''}</div>`;
   }
 
   async function loadAnalytics() {
     if (!currentClientId) return;
+    const box = document.getElementById('kpis');
     try {
       const res = await fetch('/api/analytics?client_id=' + encodeURIComponent(currentClientId));
-      analyticsData = await res.json();
-      updateDashboard();
-      generateInsights();
-    } catch (e) {
-      console.error('Could not load analytics:', e);
-    }
-  }
-
-  function setFilter(filter) {
-    currentFilter = filter;
-    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
-    if (analyticsData) updateDashboard();
-  }
-
-  function updateDashboard() {
-    const d = analyticsData;
-    const f = currentFilter;
-
-    // KPI Cards
-    const total = d.totals[f] ?? d.totals.week;
-    const allTime = d.totals.all_time;
-    document.getElementById('kpiTotal').textContent = total;
-    document.getElementById('kpiTotalSub').textContent = `${allTime} all time`;
-
-    const res = d.resolution_rate[f];
-    document.getElementById('kpiResolution').textContent =
-      res !== null ? `${res}%` : 'N/A';
-
-    const sat = d.satisfaction[f];
-    document.getElementById('kpiSatisfaction').textContent =
-      sat !== null ? `${sat}★` : 'N/A';
-
-    const msgs = d.avg_messages[f];
-    document.getElementById('kpiMessages').textContent = msgs || '—';
-
-    // Intent pie chart
-    renderIntentChart(d.intent_breakdown);
-
-    // Hourly bar chart
-    renderHourlyChart(d.hourly_breakdown);
-
-    // Feedback
-    renderFeedback(d.recent_feedback);
-
-    // Unresolved
-    renderUnresolved(d.unresolved);
-  }
-
-  function renderIntentChart(breakdown) {
-    const labels = Object.keys(breakdown);
-    const values = Object.values(breakdown);
-    const colors = labels.map(l => INTENT_COLORS[l] || '#9b9b9b');
-
-    if (intentChart) intentChart.destroy();
-
-    const ctx = document.getElementById('intentChart').getContext('2d');
-    intentChart = new Chart(ctx, {
-      type: 'doughnut',
-      data: {
-        labels: labels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
-        datasets: [{
-          data: values,
-          backgroundColor: colors,
-          borderWidth: 2,
-          borderColor: '#ffffff'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'right',
-            labels: {
-              font: { family: 'DM Sans', size: 12 },
-              padding: 16,
-              usePointStyle: true
-            }
-          }
-        }
-      }
-    });
-  }
-
-  function renderHourlyChart(hourly) {
-    const labels = Array.from({length: 24}, (_, i) => {
-      const h = i % 12 || 12;
-      return `${h}${i < 12 ? 'am' : 'pm'}`;
-    });
-    const values = Array.from({length: 24}, (_, i) => hourly[String(i)] || 0);
-
-    if (hourlyChart) hourlyChart.destroy();
-
-    const ctx = document.getElementById('hourlyChart').getContext('2d');
-    hourlyChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Conversations',
-          data: values,
-          backgroundColor: 'rgba(212,129,10,0.7)',
-          borderColor: '#d4810a',
-          borderWidth: 1,
-          borderRadius: 4
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: { precision: 0, font: { family: 'DM Mono', size: 10 } },
-            grid: { color: 'rgba(0,0,0,0.05)' }
-          },
-          x: {
-            ticks: { font: { family: 'DM Mono', size: 9 }, maxRotation: 45 },
-            grid: { display: false }
-          }
-        }
-      }
-    });
-  }
-
-  function renderFeedback(feedback) {
-    const container = document.getElementById('feedbackList');
-    if (!feedback || feedback.length === 0) {
-      container.innerHTML = '<div class="empty-state">No feedback yet.</div>';
-      return;
-    }
-    container.innerHTML = feedback.map(f => `
-      <div class="feedback-item">
-        <div class="feedback-stars">${'★'.repeat(f.rating || 0)}${'☆'.repeat(5 - (f.rating || 0))}</div>
-        <div>
-          <div class="feedback-comment">${escapeHtml(f.comment || 'No comment left.')}</div>
-          <div class="feedback-meta">${f.intent} · ${f.date} · Session ${f.session_id}</div>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  function renderUnresolved(unresolved) {
-    const container = document.getElementById('unresolvedList');
-    if (!unresolved || unresolved.length === 0) {
-      container.innerHTML = '<div class="empty-state">🎉 No unresolved conversations!</div>';
-      return;
-    }
-    container.innerHTML = unresolved.map(u => `
-      <div class="unresolved-item">
-        <div class="unresolved-intent">❌ ${u.intent}</div>
-        <div class="unresolved-msg">"${escapeHtml(u.last_message)}"</div>
-        <div class="unresolved-meta">${u.message_count} messages · ${u.date} · Session ${u.session_id}</div>
-      </div>
-    `).join('');
-  }
-
-  async function generateInsights() {
-    const container = document.getElementById('insightsContent');
-
-    if (!analyticsData) {
-      container.innerHTML = '<div class="insights-loading">No data available yet.</div>';
-      return;
-    }
-
-    try {
-      const d = analyticsData;
-      const intentBreakdown = d.intent_breakdown;
-      const topIntent = Object.entries(intentBreakdown)
-        .sort((a, b) => b[1] - a[1])[0];
-      const resRate = d.resolution_rate.week;
-      const unresolved = d.unresolved || [];
-      const totalWeek = d.totals.week;
-
-      const prompt = `You are an AI business analyst for a customer service chatbot platform.
-
-Here is the conversation data for this week:
-- Total conversations: ${totalWeek}
-- Top contact reason: ${topIntent ? topIntent[0] + ' (' + topIntent[1] + ' conversations)' : 'unknown'}
-- Resolution rate: ${resRate !== null ? resRate + '%' : 'unknown'}
-- Unresolved conversations: ${unresolved.length}
-- Intent breakdown: ${JSON.stringify(intentBreakdown)}
-- Recent unresolved issues: ${unresolved.slice(0, 3).map(u => u.intent + ': ' + u.last_message).join(' | ')}
-
-Generate exactly 3 specific, actionable insights for the business owner.
-Each insight should:
-1. Identify a specific pattern or problem
-2. Give a concrete suggestion to fix it
-
-Format as JSON array: [{"icon": "emoji", "text": "insight text with <strong>key phrase</strong> highlighted"}]
-Return ONLY the JSON array, no other text.`;
-
-      const res = await fetch('/api/insights', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
-      });
-
-      const data = await res.json();
-      const insights = data.insights || [];
-
-      if (insights.length === 0) {
-        container.innerHTML = '<div class="insights-loading">Not enough data for insights yet. Check back after more conversations.</div>';
-        return;
-      }
-
-      container.innerHTML = insights.map(insight => `
-        <div class="insight-item">
-          <div class="insight-icon">${insight.icon}</div>
-          <div class="insight-text">${insight.text}</div>
-        </div>
-      `).join('');
-
-    } catch (e) {
-      container.innerHTML = '<div class="insights-loading">Could not generate insights right now.</div>';
-    }
-  }
-
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.appendChild(document.createTextNode(str || ''));
-    return div.innerHTML;
+      const d = await res.json();
+      box.innerHTML =
+        kpi('Conversations', d.conversations, d.conversations_all_time + ' all time') +
+        kpi('Leads (finished)', d.leads_complete) +
+        kpi('Leads (partial)', d.leads_partial, 'left contact info, then went quiet') +
+        kpi('Lead rate', d.lead_rate + '%', 'of conversations') +
+        kpi('After-hours leads', d.leads_after_hours, 'outside business hours') +
+        kpi('Tours booked', d.tours_booked, d.tours_canceled + ' canceled, ' + d.tours_upcoming + ' upcoming') +
+        kpi('Accommodation requests', d.accommodation_requests, 'follow up personally');
+    } catch (e) { box.textContent = 'Could not load analytics.'; }
   }
 
   loadClients();

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/magni-micro.svg">
+  <title>Magni | Leasing assistant for rentals</title>
+  <meta name="description" content="A website chat assistant for property managers, real estate agents and vacation rental operators. Answers prospects 24/7, pre-qualifies them, and books tours.">
+  <style>
+    :root { --bg:#faf7f2; --card:#fff; --text:#1a1a1a; --dim:#5f5f66; --border:#e7e2d9; --accent:#b45309; --accent-soft:#fdf1e3; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#111114; --card:#1b1b20; --text:#ececee; --dim:#a1a1aa; --border:#2c2c33; --accent:#f59e0b; --accent-soft:#2a2013; } }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.55; }
+    .wrap { max-width:960px; margin:0 auto; padding:0 16px; }
+    header { display:flex; justify-content:space-between; align-items:center; padding:18px 0; }
+    .logo { font-weight:700; font-size:1.15rem; letter-spacing:0.01em; }
+    .nav a { color:var(--text); text-decoration:none; margin-left:16px; font-size:0.95rem; }
+    .hero { padding:48px 0 32px; }
+    h1 { font-size:clamp(1.8rem, 4vw, 2.6rem); line-height:1.15; margin:0 0 14px; max-width:720px; }
+    .lead { font-size:1.1rem; color:var(--dim); max-width:640px; margin:0 0 24px; }
+    .btn { display:inline-block; padding:12px 20px; border-radius:10px; text-decoration:none; font-weight:600; font-size:0.98rem; }
+    .btn.primary { background:var(--accent); color:#fff; }
+    .btn.ghost { border:1px solid var(--border); color:var(--text); margin-left:8px; }
+    .note { color:var(--dim); font-size:0.88rem; margin-top:12px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin:28px 0; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px; }
+    .card h3 { margin:0 0 6px; font-size:1.02rem; }
+    .card p { margin:0; color:var(--dim); font-size:0.94rem; }
+    h2 { font-size:1.35rem; margin:40px 0 6px; }
+    .demo { background:var(--accent-soft); border:1px solid var(--border); border-radius:14px; padding:18px; margin:18px 0; }
+    .price { font-size:1.6rem; font-weight:700; margin:6px 0; }
+    footer { color:var(--dim); font-size:0.85rem; padding:40px 0 60px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">Magni</div>
+      <nav class="nav"><a href="/client/login">Log in</a><a href="/signup">Start free trial</a></nav>
+    </header>
+
+    <section class="hero">
+      <h1>Your leasing assistant, on your website, around the clock.</h1>
+      <p class="lead">For property managers, real estate agents and vacation rental operators. Magni answers prospects from your own listings, asks your pre-qualifying questions, books tours on your calendar, and sends you every lead the moment it comes in.</p>
+      <a class="btn primary" href="/signup">Start your 14-day free trial</a>
+      <a class="btn ghost" href="#demo">Try the demo</a>
+      <p class="note">No setup fee. Paste one line of code into your site.</p>
+    </section>
+
+    <div class="grid">
+      <div class="card"><h3>Captures every lead</h3><p>Name, phone and email, plus move-in date or stay dates, budget, pets and more. Even half-finished chats get sent to you.</p></div>
+      <div class="card"><h3>Books tours for you</h3><p>Prospects pick an open time in the chat. They get a confirmation, a calendar invite and a reminder.</p></div>
+      <div class="card"><h3>Answers only from your facts</h3><p>Prices, fees and policies come from your listings. If it's not there, the assistant says your team will confirm.</p></div>
+      <div class="card"><h3>Built with Fair Housing in mind</h3><p>Every prospect gets the same questions in the same order. Assistance animals are never treated as pets.</p></div>
+    </div>
+
+    <h2 id="demo">Try it</h2>
+    <div class="demo">
+      {% if demo_key %}
+        Open the chat button in the corner and ask about <b>Sunset Palms</b>, a sample apartment community. Try "Is the 2 bedroom available? Can I tour Saturday?" The demo never sends emails or texts.
+      {% else %}
+        The live demo isn't set up on this server yet.
+      {% endif %}
+    </div>
+
+    <h2>Pricing</h2>
+    <div class="grid">
+      {% for key, p in plans.items() %}
+      <div class="card"><h3>{{ p.name }}</h3><div class="price">${{ p.price }}<span style="font-size:0.9rem;font-weight:400">/month</span></div><p>{{ p.blurb }}</p></div>
+      {% endfor %}
+    </div>
+
+    <footer>Magni · <a href="/client/login" style="color:inherit">Customer login</a></footer>
+  </div>
+  {% if demo_key %}<script src="/widget/magni.js" data-api-key="{{ demo_key }}"></script>{% endif %}
+</body>
+</html>

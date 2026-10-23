@@ -1,6 +1,5 @@
 import os
 import re
-import uuid
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from dotenv import load_dotenv
  
@@ -12,14 +11,7 @@ from routes.billing import billing_bp, portal_billing_bp
 from routes.widget import widget_bp
 from werkzeug.middleware.proxy_fix import ProxyFix
  
-from agents.orchestrator import orchestrator
-from core.conversation_manager import conversation_manager
-from core.conversation_store import (
-    start_conversation, add_message_to_conversation,
-    set_resolution, set_rating, get_all_conversations,
-    get_analytics_data
-)
-from core.feedback_flow import save_feedback, get_feedback_summary
+from core.leads import leasing_metrics
 from core.knowledge_base import (
     add_article, get_all_articles, get_article,
     update_article, delete_article, get_categories
@@ -35,7 +27,7 @@ from core.client_auth import (
     log_in_client, log_out_client, current_client_id, client_login_required,
 )
 from core.csrf import get_csrf_token, rotate_csrf_token, csrf_valid
-from core.billing_policies import TRIAL_DAYS, SELF_SERVE_PLANS
+from core.billing_policies import TRIAL_DAYS, SELF_SERVE_PLANS, TIER_LIMITS
 from core.leasing import (
     VERTICALS, RENTAL_VERTICALS, QUESTION_CATALOG, available_questions,
     normalize_lead_config, LeadConfigError,
@@ -85,191 +77,27 @@ app.register_blueprint(portal_billing_bp)
 with app.app_context():
     init_db()
  
-# â”€â”€ DEMO ACCOUNT CONSTANTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-DEMO_CLIENT_ID   = "demo"
-DEMO_API_KEY     = os.getenv("MAGNI_DEMO_API_KEY", "sk_magni_demo_public_2026")
-DEMO_DAILY_LIMIT = 50
- 
-def _check_demo_limit():
-    """
-    Atomically checks and increments the demo account usage counter.
-    Returns (allowed: bool, reason: str).
-    Fails closed if the database is unreachable.
-    """
-    try:
-        db = SessionLocal()
-        demo = db.query(Client).filter(Client.id == DEMO_CLIENT_ID).first()
-        if not demo:
-            db.close()
-            return False, "demo_not_found"
-        if not demo.is_active:
-            db.close()
-            return False, "demo_suspended"
-        if demo.monthly_used >= DEMO_DAILY_LIMIT:
-            db.close()
-            return False, "demo_limit"
-        demo.monthly_used += 1
-        db.commit()
-        db.close()
-        return True, "ok"
-    except Exception as e:
-        logger.error(f"Demo limit check failed: {e}")
-        return False, "demo_suspended"  # fail closed: never spend API money we can't count
- 
-# â”€â”€ CHAT ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
- 
+# ── PUBLIC LANDING PAGE ───────────────────────────────────────────────────
+# The root page is a short product page with a live demo: the real widget,
+# served for the "demo" client (a sample rental) created by
+# scripts/create_demo_client.py. Demo usage runs through the same billing
+# gate as every customer, capped daily by scripts/reset_demo_daily.py.
+DEMO_CLIENT_ID = "demo"
+
+
 @app.route("/")
 def index():
-    if "session_id" not in session:
-        session["session_id"] = str(uuid.uuid4())
-    return render_template("chat.html")
- 
-def _caller_client_id():
-    """Authoritative client_id for a public chat/resolve/feedback request: the
-    API-key header identifies a paying client, otherwise it's the demo client.
-    Returns None if an API key is supplied but does not match an ACTIVE client,
-    so a suspended client's key stops working on every public route."""
-    api_key = request.headers.get("X-Magni-API-Key", "").strip()
-    if api_key and api_key != DEMO_API_KEY:
-        c = get_client_by_api_key(api_key, active_only=True)
-        return c.id if c else None
-    return DEMO_CLIENT_ID
+    demo_key = None
+    db = SessionLocal()
+    try:
+        demo = db.get(Client, DEMO_CLIENT_ID)
+        if demo and demo.is_active:
+            demo_key = demo.api_key
+    finally:
+        db.close()
+    return render_template("landing.html", demo_key=demo_key, plans=SELF_SERVE_PLANS)
 
 
-@app.route("/chat", methods=["POST"])
-def chat():
-    data = request.get_json()
-    if not data or "message" not in data:
-        return jsonify({"error": "No message provided"}), 400
- 
-    message = sanitize_input(data.get("message", ""))
-    if not message:
-        return jsonify({"error": "Empty message"}), 400
- 
-    # â”€â”€ DEMO GUARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    # Public visitors use the demo account (50 convos/day total).
-    # Paying clients send X-Magni-API-Key header â€” skip the demo guard.
-    api_key = request.headers.get("X-Magni-API-Key", "").strip()
-    is_paying_client = bool(api_key and api_key != DEMO_API_KEY)
-    # Customer keys are public (they sit in the embed snippet), so they only
-    # work through /widget/chat, which enforces allowed domains and rate limits.
-    if is_paying_client:
-        return jsonify({"error": "Use the website widget (/widget/chat) with this key."}), 403
- 
-    if not is_paying_client:
-        allowed, reason = _check_demo_limit()
-        if not allowed:
-            if reason == "demo_limit":
-                return jsonify({
-                    "response": (
-                        "The live demo has reached its daily limit of 50 conversations â€” "
-                        "this keeps API costs controlled while the demo stays free and open. "
-                        "The counter resets at midnight UTC. "
-                        "Want a full walkthrough? Reach out at zmarm11@yahoo.com "
-                        "or visit zakarymarmel.netlify.app."
-                    ),
-                    "intent": "general",
-                    "session_id": data.get("session_id", "demo")
-                }), 200
-            elif reason == "demo_suspended":
-                return jsonify({
-                    "response": "The live demo is temporarily paused. Please check back shortly.",
-                    "intent": "general",
-                    "session_id": data.get("session_id", "demo")
-                }), 200
-    # â”€â”€ END DEMO GUARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
- 
-    session_id = data.get("session_id") or str(uuid.uuid4())
-
-    # In-memory history is namespaced by the authoritative tenant, so two
-    # tenants submitting the same session_id never share live context.
-    chat_client_id = _caller_client_id()
-    mem_key = f"{chat_client_id or 'anon'}:{session_id}"
-    history = conversation_manager.get_history(mem_key)
-
-    result = orchestrator.run(
-        message=message,
-        session_id=session_id,
-        history=history,
-        api_key=api_key if is_paying_client else None,
-        client_id=None if is_paying_client else DEMO_CLIENT_ID,
-    )
-
-    intent = result.get("intent", "general")
-    response = result["response"]
-
-    logger.info(
-        f"Session: {session_id[:8]} | Intent: {intent} | "
-        f"Route: {result.get('route')} | Message: {message[:50]}"
-    )
-
-    conv_client_id = result.get("client_id")
-    if conv_client_id:
-        start_conversation(conv_client_id, session_id)
-        add_message_to_conversation(conv_client_id, session_id, "user", message, intent)
-        add_message_to_conversation(conv_client_id, session_id, "assistant", response, intent)
-    conversation_manager.add_message(mem_key, "user", message)
-    conversation_manager.add_message(mem_key, "assistant", response)
-
-    return jsonify({
-        "response": response,
-        "intent": intent,
-        "session_id": session_id,
-    })
- 
-@app.route("/resolve", methods=["POST"])
-def resolve():
-    """Customer clicks Yes/No resolution button."""
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No data"}), 400
- 
-    session_id = data.get("session_id")
-    resolved = data.get("resolved")
- 
-    if session_id is None or resolved is None:
-        return jsonify({"error": "Missing fields"}), 400
- 
-    client_id = _caller_client_id()
-    if not client_id:
-        return jsonify({"error": "Unauthorized"}), 401
-    if not set_resolution(client_id, session_id, bool(resolved)):
-        return jsonify({"error": "Conversation not found"}), 404
-    return jsonify({"status": "ok"})
- 
-@app.route("/feedback", methods=["POST"])
-def feedback():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
- 
-    session_id = data.get("session_id", "unknown")
-    rating = data.get("rating", 0)
-    comment = sanitize_input(data.get("comment", ""))
- 
-    if not isinstance(rating, int) or rating < 1 or rating > 5:
-        return jsonify({"error": "Rating must be 1-5"}), 400
- 
-    client_id = _caller_client_id()
-    if not client_id:
-        return jsonify({"error": "Unauthorized"}), 401
-    # Prove conversation ownership BEFORE persisting anything (incl. the
-    # separate feedback store), so a valid tenant can't write feedback onto
-    # another tenant's conversation.
-    if not set_rating(client_id, session_id, rating, comment):
-        return jsonify({"error": "Conversation not found"}), 404
-    save_feedback(session_id, rating, comment)
- 
-    return jsonify({"status": "Thank you for your feedback!"})
- 
-@app.route("/reset", methods=["POST"])
-def reset():
-    data = request.get_json()
-    session_id = data.get("session_id") if data else None
-    if session_id:
-        conversation_manager.reset_session(f"{_caller_client_id() or 'anon'}:{session_id}")
-    return jsonify({"status": "Session reset"})
- 
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
@@ -468,7 +296,7 @@ def portal_kb_delete(article_id):
 @app.route("/api/portal/analytics", methods=["GET"])
 @client_login_required
 def portal_analytics():
-    return jsonify(get_analytics_data(current_client_id()))
+    return jsonify(leasing_metrics(current_client_id()))
 
 
 @app.route("/api/portal/settings", methods=["PUT"])
@@ -529,17 +357,14 @@ def portal_leasing_get():
 def portal_leasing_put():
     cid = current_client_id()
     data = request.get_json() or {}
-    vertical = (data.get("vertical") or "general").strip()
+    vertical = (data.get("vertical") or "").strip()
     if vertical not in VERTICALS:
         return jsonify({"error": "Unknown business type"}), 400
     try:
-        config = normalize_lead_config(data.get("config") or {}, vertical, strict=True) \
-            if vertical in RENTAL_VERTICALS else None
+        config = normalize_lead_config(data.get("config") or {}, vertical, strict=True)
     except LeadConfigError as e:
         return jsonify({"error": str(e)}), 400
-    updates = {"vertical": vertical}
-    if config is not None:
-        updates["lead_config"] = config
+    updates = {"vertical": vertical, "lead_config": config}
     client = update_client(cid, **updates)
     if not client:
         return jsonify({"error": "Client not found"}), 404
@@ -765,6 +590,23 @@ def kb_delete(article_id):
         return jsonify({"error": "Article not found"}), 404
     return jsonify({"status": "deleted"})
  
+def _tier_error(tier, client_id=None):
+    """Operator-set tiers must be real tiers. "unlimited" is for operator-run
+    pilot accounts only, never a self-serve (trial or Stripe) account."""
+    if tier not in TIER_LIMITS:
+        return jsonify({"error": f"Unknown tier. Use one of: {', '.join(TIER_LIMITS)}"}), 400
+    if tier == "unlimited" and client_id:
+        db = SessionLocal()
+        try:
+            c = db.get(Client, client_id)
+            self_serve = bool(c and (c.password_hash or c.trial_ends_at or c.stripe_subscription_id))
+        finally:
+            db.close()
+        if self_serve:
+            return jsonify({"error": "Unlimited is only for operator-managed accounts, not self-serve ones."}), 400
+    return None
+
+
 # â”€â”€ CLIENT MANAGEMENT ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
 @app.route("/api/clients", methods=["GET"])
@@ -780,12 +622,15 @@ def clients_create():
     data = request.get_json()
     if not data or not data.get("business_name") or not data.get("email"):
         return jsonify({"error": "Business name and email are required"}), 400
+    err = _tier_error(data.get("tier", "starter"))
+    if err:
+        return err
  
     client = create_client(
         business_name=sanitize_input(data["business_name"]),
         email=sanitize_input(data["email"]),
         tier=data.get("tier", "starter"),
-        bot_name=sanitize_input(data.get("bot_name", "Magni")),
+        bot_name=sanitize_input(data.get("bot_name", "Leasing Assistant")),
         api_key=data.get("api_key", ""),
         billing_date=data.get("billing_date", "")
     )
@@ -808,6 +653,9 @@ def clients_update(client_id):
         if field in data:
             updates[field] = sanitize_input(data[field])
     if "tier" in data:
+        err = _tier_error(data["tier"], client_id)
+        if err:
+            return err
         updates["tier"] = data["tier"]
  
     client = update_client(client_id, **updates)
@@ -858,56 +706,15 @@ def clients_delete(client_id):
  
 # â”€â”€ ANALYTICS ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
-@app.route("/api/insights", methods=["POST"])
-@api_login_required
-def ai_insights():
-    """Generate AI-powered insights from analytics data."""
-    from core import llm
-    data = request.get_json()
-    prompt = data.get("prompt", "")
-    if not prompt:
-        return jsonify({"insights": []}), 400
-    try:
-        text = llm.generate(prompt, fast=False, thinking="low")
-        # Strip markdown fences if present
-        text = text.replace("```json", "").replace("```", "").strip()
-        import json as _json
-        insights = _json.loads(text)
-        return jsonify({"insights": insights})
-    except Exception as e:
-        logger.error(f"Insights error: {e}")
-        return jsonify({"insights": []}), 500
- 
 @app.route("/api/analytics", methods=["GET"])
 @api_login_required
 def analytics_data():
     client_id, err = _resolve_admin_client_id(request.args)
     if err:
         return err
-    return jsonify(get_analytics_data(client_id))
- 
-@app.route("/api/analytics/conversations", methods=["GET"])
-@api_login_required
-def analytics_conversations():
-    client_id, err = _resolve_admin_client_id(request.args)
-    if err:
-        return err
-    conversations = get_all_conversations(client_id)
-    # Return last 50, newest first, without full message content
-    recent = sorted(conversations,
-                   key=lambda x: x.get("started_at", 0), reverse=True)[:50]
-    summary = [{
-        "session_id": c["session_id"][:8],
-        "date": c.get("date", ""),
-        "message_count": c.get("message_count", 0),
-        "primary_intent": c.get("primary_intent", "general"),
-        "resolved": c.get("resolved"),
-        "rating": c.get("rating"),
-        "duration": round((c.get("ended_at", 0) or 0) -
-                         (c.get("started_at", 0) or 0))
-    } for c in recent]
-    return jsonify({"conversations": summary})
- 
+    return jsonify(leasing_metrics(client_id))
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
