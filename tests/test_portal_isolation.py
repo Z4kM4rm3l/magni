@@ -149,16 +149,15 @@ from core.client_manager import get_client_by_api_key
 
 resolved = get_client_by_api_key(d_key, active_only=True)
 check("active API key resolves through shared resolver", resolved is not None and resolved.id == d_id)
-with appmod.app.test_request_context("/", headers={"X-Magni-API-Key": d_key}):
-    check("active API key resolves through public request resolver", appmod._caller_client_id() == d_id)
+_w = appmod.app.test_client()
+check("active API key works on the public widget", _w.get("/widget/config?key=" + d_key).status_code == 200)
 
 s = _db.SessionLocal()
 s.query(models.Client).filter(models.Client.id == d_id).first().is_active = False
 s.commit(); s.close()
 
 check("suspended API key rejected by shared resolver", get_client_by_api_key(d_key, active_only=True) is None)
-with appmod.app.test_request_context("/", headers={"X-Magni-API-Key": d_key}):
-    check("suspended API key rejected by public request resolver", appmod._caller_client_id() is None)
+check("suspended API key rejected by the public widget", _w.get("/widget/config?key=" + d_key).status_code == 403)
 
 print()
 if failures:

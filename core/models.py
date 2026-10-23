@@ -35,13 +35,13 @@ class Client(Base):
     billing_synced_at      = Column(DateTime(timezone=True), nullable=True)  # created-time of last applied Stripe event
 
     # ── Vertical / leasing assistant ──────────────────────────────────────────
-    vertical    = Column(String, nullable=True, default="general")  # general|long_term|seasonal
+    vertical    = Column(String, nullable=True, default="long_term")  # long_term|seasonal
     lead_config = Column(JSON, nullable=True)  # validated by core.leasing.normalize_lead_config
 
     # ── Widget config ─────────────────────────────────────────────────────────
-    bot_name        = Column(String, default="Magni")
+    bot_name        = Column(String, default="Leasing Assistant")
     primary_color   = Column(String, default="#f59e0b")
-    welcome_message = Column(String, default="Hi! How can I help you today?")
+    welcome_message = Column(String, default="Hi! Looking for a place? I can check availability and book a tour.")
     allowed_domains = Column(JSON, nullable=True)   # ["mikeshvac.com"] — jsonb in Postgres
 
     # ── Relationships ─────────────────────────────────────────────────────────

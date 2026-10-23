@@ -91,9 +91,9 @@ def widget_config():
         return jsonify({"error": "Invalid or inactive API key"}), 403
 
     resp = make_response(jsonify({
-        "bot_name":       client.bot_name or "Magni",
+        "bot_name":       client.bot_name or "Leasing Assistant",
         "primary_color":  client.primary_color or "#f59e0b",
-        "welcome_message": client.welcome_message or "Hi! How can I help you today?",
+        "welcome_message": client.welcome_message or "Hi! Looking for a place? I can check availability and book a tour.",
     }))
     return _add_cors(resp, client)
 
@@ -191,7 +191,7 @@ _MAGNI_JS = r"""
   var API_KEY = script.getAttribute('data-api-key');
   var BASE_URL = script.src.replace('/widget/magni.js', '');
   var sessionId = null;  // server-issued on first message
-  var config = { bot_name: 'Magni', primary_color: '#f59e0b', welcome_message: 'Hi! How can I help you today?' };
+  var config = { bot_name: 'Leasing Assistant', primary_color: '#f59e0b', welcome_message: 'Hi! Looking for a place? I can check availability and book a tour.' };
 
   // ── Fetch config ────────────────────────────────────────────────────────
   fetch(BASE_URL + '/widget/config?key=' + encodeURIComponent(API_KEY))
@@ -246,7 +246,7 @@ _MAGNI_JS = r"""
     var open = false;
 
     // Welcome message
-    appendMsg(config.welcome_message || 'Hi! How can I help you today?', 'bot');
+    appendMsg(config.welcome_message || 'Hi! Looking for a place? I can check availability and book a tour.', 'bot');
 
     bubble.addEventListener('click', function () {
       open = !open;

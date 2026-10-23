@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 from core.db import SessionLocal
 from core.models import Client
 from core.billing_policies import TIER_LIMITS, PLAN_PRICES, billing_state, trial_days_left
-from core.leasing import normalize_lead_config, VERTICALS
+from core.leasing import normalize_lead_config, VERTICALS, DEFAULT_VERTICAL, vertical_of
 from core.utils import logger
 
 # Feature flags per tier — kept here for admin UI display logic.
@@ -52,12 +52,12 @@ def _client_to_dict(c: Client) -> dict:
         "email":              c.email or "",
         "tier":               tier,
         "status":             "active" if c.is_active else "suspended",
-        "bot_name":           c.bot_name or "Magni",
+        "bot_name":           c.bot_name or "Leasing Assistant",
         "api_key":            c.api_key or "",
         "notes":              c.notes or "",
         # Widget config
         "primary_color":      c.primary_color or "#f59e0b",
-        "welcome_message":    c.welcome_message or "Hi! How can I help you today?",
+        "welcome_message":    c.welcome_message or "Hi! Looking for a place? I can check availability and book a tour.",
         "allowed_domains":    c.allowed_domains or [],
         # Billing counters (kept for UI parity with old JSON shape)
         "conversation_limit": (
@@ -76,9 +76,9 @@ def _client_to_dict(c: Client) -> dict:
         "subscription_status": c.subscription_status or "",
         "has_billing_account": bool(c.stripe_customer_id),
         # Leasing assistant
-        "vertical":            c.vertical or "general",
-        "vertical_label":      VERTICALS.get(c.vertical or "general", "General business"),
-        "lead_config":         normalize_lead_config(c.lead_config, c.vertical or "general"),
+        "vertical":            vertical_of(c.vertical),
+        "vertical_label":      VERTICALS[vertical_of(c.vertical)],
+        "lead_config":         normalize_lead_config(c.lead_config, vertical_of(c.vertical)),
         # Timestamps
         "created_at": c.created_at.timestamp() if c.created_at else None,
         "updated_at": None,  # not tracked on the SQL model; kept for shape parity
@@ -89,11 +89,11 @@ def create_client(
     business_name: str,
     email: str,
     tier: str,
-    bot_name: str = "Magni",
+    bot_name: str = "Leasing Assistant",
     api_key: str = "",
     billing_date: str = "",
     primary_color: str = "#f59e0b",
-    welcome_message: str = "Hi! How can I help you today?",
+    welcome_message: str = "Hi! Looking for a place? I can check availability and book a tour.",
     allowed_domains: list | None = None,
     notes: str = "",
     trial_days: int | None = None,
@@ -119,7 +119,7 @@ def create_client(
             monthly_used=0,
             created_at=datetime.now(timezone.utc),
             trial_ends_at=(datetime.now(timezone.utc) + timedelta(days=trial_days)) if trial_days else None,
-            vertical="general",
+            vertical=DEFAULT_VERTICAL,
         )
         db.add(client)
         db.commit()
