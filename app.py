@@ -36,7 +36,7 @@ from core.leasing import (
 )
 from core.leads import list_leads, set_owner_status, leads_csv, OWNER_STATUSES
 from core import scheduling
-from core.lead_flow import on_appointment_canceled
+from core.lead_flow import on_appointment_canceled, _lead_lang
 from core import rate_limit
 from core.security import apply_security_headers
 from core.utils import sanitize_input, logger
@@ -471,41 +471,68 @@ def _appt_context(appt):
     return client, sched
 
 
+# The public appointment page speaks the language the prospect chatted in.
+_APPT_PAGE = {
+    "en": {"html_lang": "en", "title": "Your appointment", "heading": "Your appointment", "confirmed": "Confirmed",
+           "canceled": "Canceled", "done": "Your appointment is canceled. {biz} has been notified.", "the_team": "The team",
+           "cancel_btn": "Cancel appointment", "confirm": "Cancel this appointment?",
+           "reschedule": "To reschedule, cancel here and pick a new time in the chat on our website, or reply to your confirmation email.",
+           "not_found": "We couldn't find that appointment.", "expired": "Your session expired. Please reload the page and try again.",
+           "started": "This appointment has already started.", "generic": "Appointment"},
+    "es": {"html_lang": "es", "title": "Su cita", "heading": "Su cita", "confirmed": "Confirmada",
+           "canceled": "Cancelada", "done": "Su cita quedó cancelada. Le avisamos a {biz}.", "the_team": "nuestro equipo",
+           "cancel_btn": "Cancelar cita", "confirm": "¿Cancelar esta cita?",
+           "reschedule": "Para cambiar la hora, cancele aquí y elija un nuevo horario en el chat de nuestro sitio web, o responda a su correo de confirmación.",
+           "not_found": "No encontramos esa cita.", "expired": "Su sesión expiró. Vuelva a cargar la página e inténtelo de nuevo.",
+           "started": "Esta cita ya comenzó.", "generic": "Cita"},
+}
+
+
+def _appt_page(record, status=200, **kw):
+    """Render the public page; `record` is the Appointment row (or None)."""
+    lang = _lead_lang(record.client_id, record.lead_id) if record is not None else "en"
+    tx = _APPT_PAGE.get(lang, _APPT_PAGE["en"])
+    if kw.get("error_key"):
+        kw["error"] = tx[kw.pop("error_key")]
+    kw.setdefault("error", None)
+    return render_template("appointment.html", tx=tx, lang=lang, **kw), status
+
+
 @app.route("/appt/<token>", methods=["GET"])
 def public_appointment(token):
     if not rate_limit.hit(f"appt:{request.remote_addr}", limit=60, window_seconds=600):
         return "Too many requests", 429
     appt = scheduling.get_by_token(token)
     if not appt:
-        return render_template("appointment.html", appt=None, error="We couldn't find that appointment."), 404
+        return _appt_page(None, 404, appt=None, error_key="not_found")
     client, sched = _appt_context(appt)
     upcoming = scheduling._aware(appt.start_at) > scheduling.now_utc()
-    return render_template("appointment.html", appt=scheduling.appt_to_dict(appt, sched),
-                           business=(client or {}).get("business_name", ""), details=sched.get("details", ""),
-                           can_cancel=appt.status == "booked" and upcoming, token=token, error=None, done=False)
+    return _appt_page(appt, appt=scheduling.appt_to_dict(appt, sched),
+                      business=(client or {}).get("business_name", ""), details=sched.get("details", ""),
+                      can_cancel=appt.status == "booked" and upcoming, token=token, done=False)
 
 
 @app.route("/appt/<token>/cancel", methods=["POST"])
 def public_appointment_cancel(token):
     if not rate_limit.hit(f"appt:{request.remote_addr}", limit=60, window_seconds=600):
         return "Too many requests", 429
-    if not csrf_valid():
-        return render_template("appointment.html", appt=None, error="Your session expired. Please reload the page and try again."), 403
     existing = scheduling.get_by_token(token)
+    if not csrf_valid():
+        return _appt_page(existing, 403, appt=None, error_key="expired")
     if not existing:
-        return render_template("appointment.html", appt=None, error="We couldn't find that appointment."), 404
+        return _appt_page(None, 404, appt=None, error_key="not_found")
     client, sched = _appt_context(existing)
     if scheduling._aware(existing.start_at) <= scheduling.now_utc():
-        return render_template("appointment.html", appt=scheduling.appt_to_dict(existing, sched),
-                               business=(client or {}).get("business_name", ""), details="",
-                               can_cancel=False, token=token, error="This appointment has already started.", done=False), 400
+        return _appt_page(existing, 400, appt=scheduling.appt_to_dict(existing, sched),
+                          business=(client or {}).get("business_name", ""), details="",
+                          can_cancel=False, token=token, error_key="started", done=False)
     appt = scheduling.cancel(token=token, by="prospect")
     if appt:
         on_appointment_canceled(appt, by="prospect")
     shown = appt or existing
-    return render_template("appointment.html", appt=scheduling.appt_to_dict(shown, sched),
-                           business=(client or {}).get("business_name", ""), details="",
-                           can_cancel=False, token=token, error=None, done=True)
+    return _appt_page(existing, appt=scheduling.appt_to_dict(shown, sched),
+                      business=(client or {}).get("business_name", ""), details="",
+                      can_cancel=False, token=token, done=True)
 
 
 @app.route("/api/portal/leads.csv", methods=["GET"])

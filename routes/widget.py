@@ -11,6 +11,7 @@ The operator panel routes (/admin, /api/*) are not affected.
 """
 import uuid
 from flask import Blueprint, request, jsonify, make_response, current_app
+from core.billing_policies import shows_branding
 from core.db import SessionLocal
 from core.models import Client
 from core.utils import sanitize_input, logger
@@ -94,6 +95,7 @@ def widget_config():
         "bot_name":       client.bot_name or "Leasing Assistant",
         "primary_color":  client.primary_color or "#f59e0b",
         "welcome_message": client.welcome_message or "Hi! Looking for a place? I can check availability and book a tour.",
+        "branding":       shows_branding(client),
     }))
     return _add_cors(resp, client)
 
@@ -220,7 +222,9 @@ _MAGNI_JS = r"""
       '.mgn-msg.bot{align-self:flex-start;background:#f3f4f6;color:#111;border-bottom-left-radius:3px;}',
       '#mgn-footer{display:flex;padding:8px;border-top:1px solid #e5e7eb;gap:6px;}',
       '#mgn-input{flex:1;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:14px;outline:none;}',
-      '#mgn-send{background:' + color + ';border:none;border-radius:8px;padding:8px 14px;color:#fff;cursor:pointer;font-size:14px;}'
+      '#mgn-send{background:' + color + ';border:none;border-radius:8px;padding:8px 14px;color:#fff;cursor:pointer;font-size:14px;}',
+      '#mgn-brand{font-family:sans-serif;font-size:11px;text-align:center;padding:0 0 6px;color:#9ca3af;}',
+      '#mgn-brand a{color:#9ca3af;text-decoration:none;}'
     ].join('');
     document.head.appendChild(style);
 
@@ -237,6 +241,18 @@ _MAGNI_JS = r"""
 
     // Owner-typed text goes in as text, never as HTML.
     panel.querySelector('#mgn-header').textContent = config.bot_name || 'Leasing Assistant';
+
+    // Starter plans and trials show a small "Powered by Magni" link.
+    if (config.branding) {
+      var brand = document.createElement('div');
+      brand.id = 'mgn-brand';
+      var link = document.createElement('a');
+      link.href = BASE_URL + '/?ref=widget';
+      link.target = '_blank'; link.rel = 'noopener';
+      link.textContent = 'Powered by Magni';
+      brand.appendChild(link);
+      panel.appendChild(brand);
+    }
 
     document.body.appendChild(bubble);
     document.body.appendChild(panel);
