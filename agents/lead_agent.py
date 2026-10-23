@@ -7,7 +7,7 @@ does that deterministically so every prospect gets identical questions.
 """
 import os
 import json
-import google.generativeai as genai
+from core import llm
 from agents import BaseAgent
 from core.leasing import QUESTION_CATALOG
 from core.utils import logger
@@ -39,15 +39,6 @@ Rules:
 - A phone number or email that is not literally in the message must not be recorded."""
 
 
-def _strip_fences(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
-    return text.strip()
-
-
 class LeadExtractor(BaseAgent):
     def run(self, payload: dict) -> dict:
         pending = payload.get("pending_key")
@@ -65,9 +56,8 @@ class LeadExtractor(BaseAgent):
             f"Prospect message: {message}"
         )
         try:
-            genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-            model = genai.GenerativeModel(model_name="gemini-2.5-flash", system_instruction=EXTRACT_PROMPT)
-            result = json.loads(_strip_fences(model.generate_content(prompt).text))
+            raw = llm.generate(prompt, EXTRACT_PROMPT, fast=True, thinking="minimal", json_mode=True)
+            result = json.loads(llm.strip_fences(raw))
             allowed = set(open_keys) | ({pending} if pending else set())
             answers = {}
             for k, v in (result.get("answers") or {}).items():

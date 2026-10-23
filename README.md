@@ -10,7 +10,7 @@ Magni is the flagship product of **Lemram Industries**.
 
 **Role:** Solo Architect & AI Software Engineer  
 **Status:** Pilot-readiness hardening in progress  
-**Stack:** Python, Flask, PostgreSQL, SQLAlchemy, Alembic, Google Gemini 2.5, Stripe, Railway
+**Stack:** Python, Flask, PostgreSQL, SQLAlchemy, Alembic, Claude Haiku 5.5 (Anthropic), Stripe, Railway
 
 ---
 
@@ -728,7 +728,7 @@ Backend	Python, Flask
 Database	PostgreSQL
 ORM	SQLAlchemy
 Migrations	Alembic
-AI	Google Gemini 2.5
+AI	Claude Haiku 5.5 (Anthropic)
 Authentication	Server-side sessions, password hashing
 Billing	Stripe
 Frontend	HTML, CSS, JavaScript

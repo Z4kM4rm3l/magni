@@ -13,7 +13,7 @@ What it creates:
     - A client row with id="demo" in your clients table
     - Hard cap of 50 conversations per day (resets daily via cron)
     - is_active=True, no Stripe subscription needed
-    - Uses your managed Gemini key (not BYO)
+    - Uses your managed Claude API key (not BYO)
 """
 import os
 import sys

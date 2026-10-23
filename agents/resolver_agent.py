@@ -1,5 +1,5 @@
 import os
-import google.generativeai as genai
+from core import llm
 from agents import BaseAgent
 from core.support_flows import get_flow_context, RENTAL_RULES
 from core.leasing import RENTAL_VERTICALS
@@ -40,14 +40,11 @@ class ResolverAgent(BaseAgent):
         message = payload.get("message", "")
         intent = payload.get("intent", "general")
         history_summary = payload.get("history_summary", "No prior context.")
-        # history is a list of {role, content} dicts for Gemini chat context
+        # history is a list of {role, content} dicts for the chat context
         history = payload.get("history", [])
         client_id = payload.get("client_id")
         vertical = payload.get("vertical") or "general"
         extra_instructions = payload.get("extra_instructions") or ""
-
-        # Configure Gemini here, not at module import, to avoid import-time side effects
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
         try:
             flow_context = get_flow_context(intent)
@@ -62,22 +59,14 @@ class ResolverAgent(BaseAgent):
                 full_system += f"\n\n{kb_context}"
                 logger.info(f"KB context injected for: {message[:40]}")
 
+            # Stable part first (cacheable across turns), per-turn summary second.
+            system_parts = [full_system]
             if history_summary and history_summary != "No prior context.":
-                full_system += f"\n\nConversation summary so far:\n{history_summary}"
+                system_parts.append(f"Conversation summary so far:\n{history_summary}")
 
-            model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash",
-                system_instruction=full_system
-            )
-
-            gemini_history = []
-            for msg in history[-10:]:
-                role = "user" if msg["role"] == "user" else "model"
-                gemini_history.append({"role": role, "parts": [msg["content"]]})
-
-            chat = model.start_chat(history=gemini_history)
-            response = chat.send_message(message)
-            response_text = response.text
+            response_text = llm.chat(system_parts, history[-10:], message, thinking="low")
+            if not response_text:
+                raise RuntimeError("empty model response")
 
             escalation_flag = any(
                 sig in response_text.lower() for sig in _ESCALATION_SIGNALS

@@ -765,15 +765,13 @@ def clients_delete(client_id):
 @api_login_required
 def ai_insights():
     """Generate AI-powered insights from analytics data."""
-    import google.generativeai as genai
+    from core import llm
     data = request.get_json()
     prompt = data.get("prompt", "")
     if not prompt:
         return jsonify({"insights": []}), 400
     try:
-        model = genai.GenerativeModel(model_name="gemini-2.5-flash")
-        response = model.generate_content(prompt)
-        text = response.text.strip()
+        text = llm.generate(prompt, fast=False, thinking="low")
         # Strip markdown fences if present
         text = text.replace("```json", "").replace("```", "").strip()
         import json as _json

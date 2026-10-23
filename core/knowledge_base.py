@@ -17,7 +17,6 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-import google.generativeai as genai
 from dotenv import load_dotenv
 
 from core.db import SessionLocal
@@ -25,7 +24,6 @@ from core.models import KnowledgeArticle
 from core.utils import logger
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 # ── Serialization ───────────────────────────────────────────────────────────
@@ -45,9 +43,9 @@ def _to_dict(a: KnowledgeArticle) -> dict:
 
 # ── Summarization (behavior unchanged from the JSON version) ─────────────────
 def generate_summary(content: str) -> str:
-    """Use Gemini to generate a concise cliff-note summary of an article."""
+    """Use the LLM to generate a concise cliff-note summary of an article."""
     try:
-        model = genai.GenerativeModel(model_name="gemini-2.5-flash")
+        from core import llm
         prompt = f"""Summarize the following business knowledge base article in 1-2 sentences maximum.
 Be concise and factual. Focus on what a customer service agent needs to know.
 
@@ -55,8 +53,7 @@ Article:
 {content[:3000]}
 
 Summary:"""
-        response = model.generate_content(prompt)
-        return response.text.strip()
+        return llm.generate(prompt, fast=True, thinking="minimal") or "Summary unavailable."
     except Exception:
         return "Summary unavailable."
 

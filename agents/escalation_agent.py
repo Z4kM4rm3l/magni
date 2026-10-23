@@ -1,5 +1,5 @@
 import os
-import google.generativeai as genai
+from core import llm
 import json
 from agents import BaseAgent
 from core.utils import logger
@@ -31,12 +31,6 @@ class EscalationAgent(BaseAgent):
         escalation_reason = payload.get("escalation_reason", "Flagged for escalation.")
         intent = payload.get("intent", "general")
 
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
-            system_instruction=ESCALATION_PROMPT
-        )
-
         prompt = (
             f"Intent: {intent}\n"
             f"Escalation reason: {escalation_reason}\n"
@@ -45,13 +39,8 @@ class EscalationAgent(BaseAgent):
         )
 
         try:
-            response = model.generate_content(prompt)
-            text = response.text.strip()
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-                text = text.strip()
+            text = llm.generate(prompt, ESCALATION_PROMPT, fast=False, thinking="low", json_mode=True)
+            text = llm.strip_fences(text)
 
             result = json.loads(text)
 
