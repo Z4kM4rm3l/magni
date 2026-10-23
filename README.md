@@ -1,794 +1,251 @@
 # Magni
 
-## AI Leasing Assistant for Rental Businesses
+## The AI leasing assistant for rental businesses
 
-Magni is a multi-tenant AI leasing assistant for long-term rental property managers and seasonal / vacation rental operators. It sits on the business's own website, answers prospects from the business's own listings, asks a fixed, Fair Housing friendly set of pre-qualifying questions, books tours on the business's calendar, and sends every lead to the owner the moment it comes in. Owners keep control over knowledge grounding, escalation, tenant isolation, usage, and AI costs.
+Magni is a website chat assistant for **long-term rental property managers** and **seasonal / vacation rental operators**. It sits on the business's own website and does what a leasing agent does at 9 pm on a Sunday:
 
-Rather than relying on a single general-purpose chatbot, Magni uses a coordinated set of specialized agents behind an orchestration layer. Customer requests can be classified, answered using tenant-specific knowledge, escalated to a human, and persisted for later analytics.
+- answers prospects' questions from the business's own listings and policies,
+- asks a fixed, Fair Housing friendly set of pre-qualifying questions,
+- books tours or calls on the business's real calendar,
+- and sends every lead to the owner the moment it comes in.
+
+It also points current residents to the right contact, works in English and Spanish, and gives owners an Insights report built only from their own data.
 
 Magni is the flagship product of **Lemram Industries**.
 
-**Role:** Solo Architect & AI Software Engineer  
-**Status:** Pilot-readiness hardening in progress  
-**Stack:** Python, Flask, PostgreSQL, SQLAlchemy, Alembic, Claude Haiku 5.5 (Anthropic), Stripe, Railway
+**Role:** Solo Architect & AI Software Engineer
+**Status:** Launch-ready, pre-deployment (Railway deploy and live smoke test next)
+**Stack:** Python, Flask, gunicorn, PostgreSQL, SQLAlchemy, Alembic, Claude Haiku 5.5 (Anthropic), Stripe, Railway
 
 ---
 
-## Product Vision
+## What it does for an owner
 
-Magni is being built as an AI intelligence layer that can eventually sit between a business's customers and the tools the business already uses.
-
-The goal is not to replace CRMs, scheduling platforms, email providers, or other operational systems. Instead, Magni is intended to understand customer requests, determine what should happen next, use the appropriate business tools, and escalate when human judgment is required.
-
-Today, the implemented product focuses on:
-
-- Embeddable website chat
-- Tenant-specific knowledge
-- Multi-agent routing and resolution
-- Human escalation
-- Tenant accounts and self-service onboarding
-- Conversation persistence
-- Analytics foundations
-- Usage and billing controls
-
-Future channel and integration work is intended to extend the same intelligence layer across voice, email, messaging, scheduling, and external business systems.
+| | |
+|---|---|
+| **Answers prospects 24/7** | Rent, fees, pets, parking, amenities, availability, how to apply. Facts come only from the owner's knowledge base. If it isn't there, the assistant says the team will confirm, and never guesses. |
+| **Pre-qualifies the same way every time** | The owner picks from a fixed catalog of questions (property, move-in or stay dates, contact details, occupants or guests, lease length, budget, pets, posted criteria). Every prospect gets the same questions, in the same order, with the same wording. |
+| **Captures every lead** | Finished intakes alert the owner by email (and SMS once Twilio is approved), with the answers, a reply-to straight to the prospect, and a calendar invite when a tour is booked. Prospects who leave contact details and go quiet are sent as partial leads after 20 minutes. |
+| **Books tours and calls** | The assistant offers real open times from the owner's weekly hours, books outright only on an exact pick ("2") or an explicit day and time, and confirms anything looser. Prospects get a confirmation, an .ics invite, a cancel link and a day-before reminder. |
+| **Multiple properties** | Owners list their properties. The property question becomes a numbered pick, so every lead names a property the owner recognizes. |
+| **Current residents** | Residents asking about repairs, rent or their lease get the owner's office contact, plus a "call 911 first" line in an emergency. They never become leads. |
+| **English and Spanish** | The conversation's language is detected once and kept. Every fixed reply, question, booking time, email and the cancel page have fixed Spanish wording. |
+| **After-hours tagging** | Leads that arrive outside the owner's hours are tagged, so they get the first call in the morning. |
+| **Insights** | A data-only report: chat-to-tour funnel, where prospects stop, questions the assistant couldn't answer, what residents complain about, results by property, and rule-based suggestions that show the numbers behind them. No AI writes any of it. |
+| **Branded as the owner's** | Bot name, accent color and welcome message are the owner's. The assistant introduces itself by the owner's bot and business name. Starter plans show a small "Powered by Magni" link. |
 
 ---
 
-## Current Customer Flow
-
-Magni now supports a self-service tenant lifecycle:
+## How a chat turn works
 
 ```text
-Business Owner
-      │
-      ▼
-Create Account
-      │
-      ▼
-Tenant Provisioned
-      │
-      ▼
-Authenticated Portal
-      │
-      ├── Account / Plan Information
-      ├── Widget Credentials
-      ├── Embed Snippet
-      └── Tenant Configuration
-      │
-      ▼
-Install Magni Widget
-      │
-      ▼
-Customer Conversations
-      │
-      ▼
-Tenant-Scoped Persistence
-
-The objective of the current development phase is to complete the remaining controls required for a business to operate Magni without manual database intervention.
-
-What Magni Does
-
-Magni currently provides:
-
-Tenant account signup and authentication
-Automatic tenant provisioning
-Authenticated customer portal
-Embeddable website support widget
-Tenant-specific knowledge bases
-Intent classification and routing
-AI-generated responses grounded in tenant knowledge
-Human escalation workflows
-PostgreSQL-backed conversation persistence
-Tenant-scoped conversation analytics
-Usage tracking and account limits
-Subscription and billing infrastructure
-Demo account isolation
-Email escalation notifications
-Layered AI cost protection
-
-The system is built around a simple principle:
-
-AI should automate work without removing operational control.
-
-That principle affects how Magni handles routing, escalation, tenancy, cost controls, and future tool integrations.
-
-Architecture
-                    ┌──────────────────┐
-                    │     Customer     │
-                    └────────┬─────────┘
-                             │
-                             ▼
-                    ┌──────────────────┐
-                    │   Chat Widget    │
-                    └────────┬─────────┘
-                             │
-                             ▼
-                 ┌────────────────────────┐
-                 │   Orchestrator Agent   │
-                 │                        │
-                 │ State + Routing + Flow │
-                 └───────────┬────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              │              │              │
-              ▼              ▼              ▼
-       ┌────────────┐ ┌────────────┐ ┌────────────┐
-       │   Triage   │ │  Resolver  │ │ Escalation │
-       │   Agent    │ │   Agent    │ │   Agent    │
-       └─────┬──────┘ └─────┬──────┘ └─────┬──────┘
-             │              │              │
-             └──────────────┼──────────────┘
-                            │
-                            ▼
-                  ┌────────────────────┐
-                  │ Tenant Knowledge   │
-                  │ Base               │
-                  └─────────┬──────────┘
-                            │
-                            ▼
-                  ┌────────────────────┐
-                  │ PostgreSQL         │
-                  │                    │
-                  │ Clients            │
-                  │ Knowledge          │
-                  │ Conversations      │
-                  │ Messages           │
-                  │ Usage / Billing    │
-                  │ Tenant State       │
-                  └────────────────────┘
-Agent Responsibilities
-Orchestrator
-
-Coordinates the overall workflow, maintains routing state, and determines which specialized agent should handle the next step.
+Visitor on the owner's website
+        │
+        ▼
+Widget  (/widget/chat)
+  - allowed-website check, per-visitor and per-account rate limits
+        │
+        ▼
+Billing and usage gate  (core/client_guard.py)
+  - trial / subscription state, one count per conversation,
+    40-message cap per chat, global daily cap, fails closed
+        │
+        ▼
+Orchestrator  (agents/orchestrator.py)
+  ├── intake in progress?      → Lead flow (deterministic: what to ask, in what order)
+  │                               ├── Lead extractor (LLM reads answers only)
+  │                               └── Scheduler (open slots, parse "el sábado a las 11", book)
+  ├── otherwise → Triage (LLM: prospect / current resident / other, or escalate)
+  │       ├── prospect   → start the intake
+  │       ├── resident   → Resolver + the owner's office contact
+  │       ├── other      → Resolver (rental-only, declines off-topic)
+  │       └── escalation → Escalation agent + owner alert
+        │
+        ▼
+Fair Housing output filter (English + Spanish)  →  reply
+```
 
-The orchestrator also carries resolved tenant identity through the agent workflow so downstream operations can remain tenant-aware.
+The model is used for three narrow jobs: classifying the message, reading answers out of the prospect's words, and phrasing answers from the knowledge base. **What to ask, in what order, when to book and who gets alerted is ordinary code**, so it is predictable and testable.
 
-Triage Agent
+---
 
-Classifies the customer's intent and determines the appropriate workflow.
+## Fair Housing by design
 
-Resolver Agent
+- Questions come from a fixed catalog in `core/leasing.py`, with fixed English and Spanish wording. Owners can turn questions on or off, but never write their own.
+- The assistant collects answers. It never scores, ranks, approves or rejects anyone.
+- Assistance animals are never treated as pets, in either language. Accommodation requests are flagged for a person to handle.
+- Every free-form rental reply passes `check_output()`, which replaces any reply describing who a home or area "suits" (families, couples, "safe neighborhood" and similar, in English and Spanish).
+- Rental criteria and property names are checked for steering language before they're saved.
+- Insights topics describe the property or the request, never the people asking.
 
-Generates answers using relevant knowledge retrieved from the current tenant's knowledge base.
+This is engineering care, not legal advice. Each customer's questions and criteria should be reviewed by counsel.
 
-Escalation Agent
+---
 
-Packages relevant context and routes unresolved or sensitive requests toward human support.
+## Multi-tenant isolation
 
-The separation is intentional. Each agent has a narrower responsibility, which makes behavior easier to inspect, test, and evolve.
+Every tenant's data is keyed by `client_id`: knowledge articles, conversations and messages, leads, appointments and settings.
 
-Why Multiple Agents?
+- Portal routes take the tenant **only** from the login session (`current_client_id()`), never from the request.
+- Conversations are owned by `client_id + session_id`, and live chat context is namespaced by tenant, so two visitors sharing a session id never share context.
+- Appointment cancel links are unguessable tokens that only allow viewing and canceling that one booking.
+- Customer widget keys are publishable. They work only through `/widget/chat`, which enforces each tenant's allowed websites and rate limits.
+- Operator (admin) and customer authentication are separate. Mutating requests require a CSRF token.
 
-A single LLM call can produce a convincing customer-service response, but convincing output is not the same as a reliable support system.
+---
 
-Magni separates responsibilities so that:
+## Billing, trials and cost control
 
-Routing logic remains explicit
-Individual agents have narrow responsibilities
-Retrieval is separated from escalation decisions
-Failures are easier to isolate
-Components can be tested independently
-Future workflows can be introduced without turning one prompt into a monolith
+- **Plans:** Starter ($49, 1,000 conversations a month) and Pro ($99, 5,000 conversations, no "Powered by" link). There's a 14-day free trial, with Stripe Checkout and the Customer Portal.
+- **Usage counts per conversation**, not per message, matching the plans. Owners get an email at 80% of their allowance and another at the limit.
+- **Trials are never reset early.** A failed card keeps the assistant answering while Stripe retries. It never locks the owner out of the portal.
+- **Webhooks** are signature-checked and idempotent, and always re-read the subscription live from Stripe. `scripts/reconcile_billing.py` repairs anything a missed webhook left behind.
+- **AI spend has four independent layers:** a database-locked per-tenant counter, fail-closed error handling, a global daily cap, and the Anthropic workspace spend limit. See `docs/BILLING_PROTECTION.md`.
 
-The orchestrator acts as the control layer while specialized agents handle specific responsibilities.
+---
 
-Multi-Tenant Architecture
+## Data, privacy and retention
 
-Tenant isolation is a core architectural requirement rather than an application-level convention.
+- Chat transcripts are deleted after **12 months**, and leads and appointments after **24 months**, by a daily job (`scripts/apply_retention.py`). Owners can export leads to CSV at any time.
+- Phone numbers and emails are masked in every Insights example.
+- Links in emails and chat come only from `PUBLIC_BASE_URL`, never from a request's Host header. The app refuses to start in production without it.
+- The landing-page demo never emails or texts anyone, and its data is cleared daily.
 
-Tenant-aware data access applies across:
+---
 
-Client accounts
-Knowledge articles
-Conversations
-Messages
-Authentication
-Analytics
-Usage tracking
-Billing state
-Account configuration
-Knowledge Isolation
+## Insights without invention
 
-Knowledge articles are stored in PostgreSQL and associated with a required client_id.
+`core/insights.py` never calls a model. It counts the tenant's own chats, leads and tours, and applies fixed rules. Each suggestion appears only once it clears a minimum sample size (for example, at least 3 unanswered questions on one topic), and it shows its basis ("based on: 4 of 6 unfinished intakes"). Topics come from fixed English and Spanish keyword lists. A message can match several topics or none, and off-topic questions are shown as they are.
 
-Knowledge operations are scoped to both the tenant and the requested resource, preventing one tenant from retrieving or modifying another tenant's knowledge.
+Examples of what it can tell an owner:
 
-Client
-  │
-  └── KnowledgeArticle
-          client_id FK
-Conversation Isolation
+- "Add a knowledge base article about parking: 3 prospect questions about parking got 'our team will confirm'."
+- "Most prospects who stop, stop at Budget."
+- "Residents' top issue: plumbing and leaks", with their own words.
 
-Durable conversations are also stored in PostgreSQL and owned by a tenant.
+---
 
-Client
-  │
-  └── Conversation
-          │
-          └── Message
+## Project structure
 
-Conversation ownership is enforced using the pair:
-
-client_id + session_id
-
-rather than trusting a session identifier by itself.
-
-Live in-memory conversation context is also namespaced by tenant so identical session identifiers cannot share context across customers.
-
-Browser widget sessions are server-issued rather than generated entirely by client-side JavaScript.
-
-Conversation Persistence
-
-Magni originally used file-backed conversation persistence during early development.
-
-That storage layer has since been replaced with PostgreSQL-backed models for:
-
-Conversations
-Messages
-Resolution telemetry
-Ratings
-Intent history
-Analytics data
-
-This eliminates the previous load-modify-rewrite JSON persistence model and provides proper relational ownership and cascade behavior.
-
-Database Migrations
-
-Magni uses Alembic for schema evolution.
-
-The current migration history includes the transition from the original client schema into tenant-scoped knowledge and conversation storage.
-
-0001  Client baseline
-  │
-0002  Tenant-scoped knowledge articles
-  │
-0003  Conversations and messages
-
-Application schema changes are therefore represented as explicit migrations rather than relying on create_all() as a production schema-management mechanism.
-
-Knowledge-Grounded Responses
-
-Magni currently uses a lightweight application-level retrieval strategy rather than a vector database.
-
-Knowledge articles are stored in PostgreSQL and searched within the current tenant using keyword matching across article titles and content.
-
-Customer Question
-       │
-       ▼
-Tenant-Scoped Retrieval
-       │
-       ▼
-Relevant Knowledge
-       │
-       ▼
-Resolver Agent
-       │
-       ▼
-Grounded Response
-
-This approach is intentionally simple for the current product scale.
-
-Semantic retrieval or PostgreSQL vector capabilities can be introduced later if knowledge volume and retrieval complexity justify them.
-
-Tenant Signup and Portal
-
-Magni now includes a full tenant signup-to-portal flow.
-
-A new business can:
-
-Create an account
-Receive its own tenant record
-Authenticate into a tenant-specific session
-Enter its customer portal
-Receive its widget credential
-Copy the website embed snippet
-Operate within its own tenant boundary
-
-Client authentication and operator/admin authentication are kept separate so administrative capabilities are not implicitly granted to customer accounts.
-
-The portal is being expanded into the primary self-service control surface for:
-
-Business settings
-Knowledge management
-Analytics
-Widget configuration
-Usage visibility
-Embeddable Support Widget
-
-The customer-facing interface is designed to live directly on a business website.
-
-Business Website
-       │
-       └── Magni Widget
-               │
-               ▼
-          Magni API
-               │
-               ▼
-       Agent Orchestration
-               │
-               ▼
-       Tenant Data + Tools
-
-The widget identifies the business tenant and routes conversations through the same orchestration layer used by the rest of the application.
-
-The browser-facing widget identifier should be treated as a publishable widget credential, not as a private server secret.
-
-Future server-to-server integrations can use a separate class of private credentials.
-
-Authentication and Authorization
-
-Magni separates customer identity, tenant identity, and administrative access.
-
-Current authentication architecture includes:
-
-Password hashing
-Tenant login sessions
-Separate operator/admin authentication
-Tenant-aware authorization
-Session expiration
-Active-account checks
-
-The current pilot-readiness phase is also hardening:
-
-Database-enforced normalized email uniqueness
-Session rotation on authentication
-Signup/login abuse protection
-Tenant ownership regression tests
-Operational Safety and AI Cost Controls
-
-LLM applications introduce an unusual operational risk: a retry loop, bug, unexpected traffic spike, or runaway workflow can translate directly into provider costs.
-
-Magni therefore uses several independent layers of protection.
-
-Atomic Tenant Usage Controls
-
-Usage counters are updated using database-level locking so concurrent requests cannot incorrectly bypass account limits.
-
-Fail-Closed Usage Handling
-
-When usage-control operations encounter unexpected failures, the application favors blocking additional model calls rather than allowing unlimited usage.
-
-Application-Level Safety Cap
-
-An additional application-level limit provides protection against unexpected aggregate traffic.
-
-At the current single-instance scale this mechanism is intentionally simple.
-
-Provider / Infrastructure Spend Protection
-
-Provider-level spending limits provide a final boundary outside the application.
-
-These layers are intentionally redundant.
-
-Tenant Limit
-     │
-     ▼
-Database Enforcement
-     │
-     ▼
-Application Safety Cap
-     │
-     ▼
-Provider Spending Limit
-
-No single safeguard is treated as absolute protection.
-
-Billing
-
-Magni includes Stripe-based subscription infrastructure alongside application-level usage controls.
-
-Billing responsibilities are intentionally separate from agent reasoning.
-
-The model does not decide whether a tenant is allowed to consume additional paid resources.
-
-That decision remains application logic.
-
-Current billing-related functionality includes:
-
-Subscription state
-Tenant tiers
-Monthly usage tracking
-Account limits
-Stripe customer/subscription identifiers
-Payment lifecycle infrastructure
-Testing
-
-Magni treats AI orchestration and tenant isolation as application behavior that should be tested rather than trusted through manual inspection alone.
-
-Current testing covers areas including:
-
-Orchestrator behavior
-Triage behavior
-Resolver behavior
-Escalation behavior
-Conversation ownership
-Cross-tenant mutation prevention
-Tenant-namespaced in-memory conversation context
-
-The pilot-readiness test suite is being expanded to cover:
-
-Cross-tenant knowledge isolation
-Cross-tenant analytics isolation
-Portal authorization
-Client versus operator authentication boundaries
-Cascade deletion behavior
-Inactive tenant behavior
-Authentication invariants
-
-Tests are located in the tests/ directory.
-
-Engineering Decisions
-Explicit Agent Boundaries
-
-Agent responsibilities are separated instead of combining every task into one large prompt.
-
-Why: smaller responsibilities are easier to debug, test, and evolve.
-
-Tenant + Resource Ownership
-
-Tenant resources are addressed using the owning tenant together with the resource identifier.
-
-For conversations, that means ownership checks use:
-
-client_id + session_id
-
-rather than trusting a session ID alone.
-
-Why: a globally unique identifier is not a substitute for authorization.
-
-Database-Enforced Usage Controls
-
-Usage limits are not implemented purely in application memory.
-
-Why: concurrent requests could otherwise observe the same remaining allowance and exceed a tenant's configured limit.
-
-Server-Issued Conversation Sessions
-
-Initial widget session IDs are generated by the server.
-
-Why: browser-generated identifiers should not be relied on as an ownership boundary.
-
-Tenant-Scoped Knowledge Retrieval
-
-Knowledge retrieval is scoped to the active tenant before context is supplied to the Resolver Agent.
-
-Why: LLM applications introduce a context-isolation problem in addition to ordinary database authorization concerns.
-
-Explicit Database Migrations
-
-Schema evolution is managed with Alembic.
-
-Why: production databases need reproducible schema changes rather than implicit table creation.
-
-Separate Scheduled Services
-
-Scheduled maintenance is kept separate from the primary web application.
-
-Why: deployment responsibilities remain clearer and scheduled tasks do not depend on the lifecycle of a web worker.
-
-Project Structure
+```text
 magni/
+├── app.py                    Flask app: landing page + demo, signup/login/password reset,
+│                             client portal and /api/portal/*, admin console, /appt/<token>
 ├── agents/
-│   ├── orchestrator.py
-│   ├── triage_agent.py
-│   ├── resolver_agent.py
-│   └── escalation_agent.py
-│
+│   ├── orchestrator.py       entry point for every chat turn
+│   ├── triage_agent.py       prospect / resident / other, or escalate
+│   ├── resolver_agent.py     rental-only answers grounded in the knowledge base
+│   ├── escalation_agent.py   human handoff decisions
+│   └── lead_agent.py         reads intake answers out of the prospect's message
 ├── core/
-│   ├── db.py
-│   ├── models.py
-│   ├── knowledge_base.py
-│   ├── conversation_store.py
-│   ├── conversation_manager.py
-│   ├── client_manager.py
-│   ├── client_guard.py
-│   └── ...
-│
-├── migrations/
-│   └── versions/
-│
+│   ├── llm.py                the only place that calls the model (Claude via the Anthropic SDK)
+│   ├── leasing.py            question catalog, config validation, Fair Housing guardrails
+│   ├── lead_flow.py          deterministic intake, booking step, alerts, partial-lead sweep, reminders
+│   ├── scheduling.py         availability, reply parsing (EN/ES), booking, cancel, .ics, after-hours
+│   ├── i18n.py               English and Spanish for every fixed reply, language detection
+│   ├── insights.py           data-only owner insights
+│   ├── leads.py              leads, CSV export, database-side analytics counts
+│   ├── retention.py          12 / 24 month retention
+│   ├── client_guard.py       usage + billing gate before any model call
+│   ├── billing_policies.py   plans, trial, entitlement, branding rule
+│   ├── notifier.py           email (any SMTP provider) and SMS
+│   ├── knowledge_base.py     tenant-scoped knowledge base
+│   └── ...                   auth, CSRF, rate limits, models, security headers
 ├── routes/
-├── scripts/
-├── static/
-├── templates/
-├── tests/
-├── app.py
-├── alembic.ini
-├── Procfile
-├── railway.json
-└── requirements.txt
-
-The repository is organized by application responsibility so AI orchestration, persistence, tenant services, routes, presentation, deployment, and tests remain distinguishable.
-
-Current Development Phase: Pilot-Ready
-
-Magni's core SaaS foundation is now in place:
-
-Multi-agent orchestration
-PostgreSQL-backed tenant model
-Tenant-scoped knowledge
-Tenant-scoped conversations
-Relational message persistence
-Alembic migrations
-Tenant signup
-Tenant login
-Customer portal
-Widget provisioning
-Usage controls
-Billing infrastructure
-Human escalation
-Conversation ownership hardening
-
-The current phase is focused on making that foundation safe and self-service enough for an external pilot.
-
-Remaining Pilot-Readiness Work
-1. Conversation Ownership Hardening
-
-Status: Implemented / validation in progress
-
-Tenant + session ownership checks
-Server-issued widget sessions
-Tenant-namespaced live context
-Cross-tenant mutation prevention
-Regression tests
-2. Tenant Settings
-
-Planned customer-facing controls include:
-
-Business name
-Bot name
-Welcome message
-Primary color
-Allowed website domains
-Widget configuration
-
-The browser-facing widget credential will also be renamed to reflect that it is publishable rather than a private API secret.
-
-3. Integration Test Suite
-
-The next test expansion focuses on tenant and authentication invariants rather than only individual agent behavior.
-
-4. Authentication Correctness
-
-Remaining low-cost hardening includes:
-
-Database-enforced email uniqueness
-Session rotation after authentication
-Basic signup and login abuse protection
-5. Restore Live Deployment
-
-Pilot-ready ultimately means the complete system is accessible in a live environment.
-
-The final acceptance test is an end-to-end flow:
-
-Signup
-  ↓
-Login
-  ↓
-Configure Tenant
-  ↓
-Add Knowledge
-  ↓
-Install Widget
-  ↓
-Customer Conversation
-  ↓
-Persist Conversation
-  ↓
-View Tenant Analytics
-  ↓
-Logout / Login
-  ↓
-Verify Isolation + Persistence
-Phase 4: First Operational Action
+│   ├── widget.py             embeddable widget, allowed websites, rate limits
+│   └── billing.py            Stripe Checkout, Customer Portal, webhooks
+├── migrations/versions/      Alembic 0001 to 0008 (Alembic is the schema authority)
+├── scripts/                  cron jobs and one-off tools (sweep, usage reset, retention,
+│                             demo account, billing reconcile, admin password hash)
+├── templates/                landing, portal, admin, auth and appointment pages
+├── tests/                    11 offline suites + 3 live-model checks
+└── docs/
+    ├── LAUNCH_CHECKLIST.md   Railway, Stripe, email, cron and smoke-test steps
+    └── BILLING_PROTECTION.md AI cost safety layers
+```
 
-After the pilot-ready foundation is complete, the next major product capability is intended to move Magni from:
+---
 
-answers questions
+## Run it locally
 
-to:
+```bash
+pip install -r requirements.txt
+cp .env.example .env            # fill in SECRET_KEY, DATABASE_URL, etc.
+python app.py                   # dev server; production runs gunicorn (see Procfile)
+```
 
-takes useful business action
+The app runs `alembic upgrade head` on startup. `python scripts/create_demo_client.py` creates the sample apartment community used by the demo on `/`.
 
-The first planned workflow is intentionally vendor-neutral:
+### Tests
 
-Lead / Appointment Capture
-Customer Conversation
-        │
-        ▼
-Magni Detects Lead Intent
-        │
-        ▼
-Collect Structured Information
-        │
-        ▼
-Create Lead
-        │
-        ▼
-Notify Business
+```bash
+python tests/test_leasing_mvp.py          # billing, intake, Fair Housing guardrails, alerts
+python tests/test_scheduler.py            # booking, cancel, reminders, widget CORS
+python tests/test_portal_isolation.py     # tenant isolation + CSRF
+python tests/test_launch_fixes.py         # usage per conversation, trial resets, key + login hardening
+python tests/test_rental_focus.py         # rental-only prompts, analytics, tiers, demo, migration 0007
+python tests/test_market_features.py      # residents, after hours, Spanish, multiple properties
+python tests/test_account_emails.py       # SMTP provider, forgot password, usage warnings
+python tests/test_retention.py            # retention + database-side counts
+python tests/test_insights.py             # data-only insights, minimum samples, masking
+python tests/test_conversation_ownership.py
+python tests/test_orchestrator.py
+```
 
-A future internal Lead model can capture information such as:
+Each suite prints `ALL PASSED`. They run on in-memory SQLite, with the model, email, SMS and Stripe stubbed, so no keys are needed. To run the database-heavy suites against real Postgres, point `MAGNI_TEST_DATABASE_URL` at an empty database that has had `alembic upgrade head`. `test_triage_agent.py`, `test_resolver_agent.py` and `test_escalation_agent.py` call the real Claude API and need `ANTHROPIC_API_KEY`.
 
-Customer name
-Phone
-Email
-Requested service
-Address
-Preferred appointment time
-Notes
-Status
-Source conversation
+### Deploy
 
-The initial action can simply create the lead and notify the business by email.
+Follow `docs/LAUNCH_CHECKLIST.md`. It covers the Railway web service and the cron services (lead sweep, monthly usage reset, demo reset, retention), the environment variables, Stripe products and webhooks, the email provider with SPF / DKIM / DMARC, and a step-by-step smoke test.
 
-External CRM integrations can then be added behind the same internal service boundary later.
+---
 
-Long-Term Direction
+## Engineering decisions
 
-Magni is intended to evolve beyond website chat into an AI customer-operations layer.
+**Deterministic flow, narrow model jobs.** The model classifies, extracts and phrases. Code decides what to ask, when to book and who to alert. *Why:* the parts that carry legal and business risk should behave the same way every time, and be testable.
 
-Conceptually:
+**Tenant + resource ownership everywhere.** Records are addressed by the owning tenant together with their id, never by id alone. *Why:* a globally unique id is not authorization.
 
-                 Customer Channels
+**Fail closed on money.** The usage gate locks the tenant's row, counts before the model is called, and blocks on any error. *Why:* a bug should cost a missed reply, not an unbounded bill.
 
-        Chat      Voice      Email      SMS
-          \         |          |         /
-           \        |          |        /
-            └────── MAGNI ─────────────┘
-                       │
-                Intelligence Layer
-                       │
-           Understand / Route / Act
-                       │
-         ┌─────────────┼─────────────┐
-         │             │             │
-        CRM        Scheduling      Email
-         │             │             │
-    ServiceTitan     Google        Gmail
-    HubSpot          Outlook       Outlook
-    Jobber
-    Salesforce
-    etc.
+**Never hold a database transaction across a model call.** Leads are loaded, detached, worked on, and saved in short transactions. *Why:* a slow model response must not hold locks or exhaust the connection pool.
 
-Magni does not need to replace those systems.
+**Insights are counted, not generated.** *Why:* an owner acting on a suggestion needs to trust that it reflects their data, so every suggestion carries its numbers.
 
-The intended role is to understand customer intent, use existing business systems when appropriate, keep context across interactions, and involve a human when automation should stop.
-
-What I Would Change at 10x Scale
-
-Magni is deliberately optimized for an early-stage, single-instance SaaS deployment.
-
-If usage grew substantially, the architecture would evolve around actual pressure points rather than introducing distributed infrastructure prematurely.
+**Explicit migrations.** Every schema change is a numbered Alembic migration. *Why:* production databases need reproducible changes.
 
-Distributed Rate Limiting
+**Single process, honest about it.** Rate limits, the login lockout and the global cap live in one gunicorn worker's memory, so production runs one replica. *Why:* that's right for this scale. Redis comes in only when horizontal scaling does.
 
-Current application-level safeguards would move toward shared rate-limit infrastructure across multiple application instances.
+---
 
-Distributed Conversation Context
-
-The current per-process live conversation cache could move to shared state such as Redis if horizontal scaling required multiple application instances.
-
-Background Job Processing
-
-Long-running work such as notifications, knowledge ingestion, analytics, synchronization, and external tool actions could move to workers behind a queue.
-
-Semantic Retrieval
-
-Keyword retrieval could be supplemented or replaced by embeddings and semantic search as tenant knowledge bases grow.
-
-PostgreSQL vector capabilities would be a natural first option before introducing a separate vector database.
-
-Tool / Connector Layer
-
-External CRM, scheduling, email, SMS, and voice systems can be abstracted behind Magni-owned capabilities such as:
-
-get_customer()
-create_lead()
-check_availability()
-book_appointment()
-send_email()
-send_sms()
-create_note()
-escalate_to_human()
+## Status and what's next
 
-Individual connectors can then implement those capabilities for different vendors without tying Magni's reasoning layer to a specific CRM.
+**Built:** self-serve signup with a 14-day trial and Stripe billing, the portal, the embeddable widget, the rental intake with instant alerts, partial-lead capture, the built-in scheduler, the resident path, Spanish, multiple properties, after-hours tags, Insights, forgot password, usage warnings, data retention, and the landing page with a live demo.
 
-Observability
+**Next:**
+- Railway deploy and live smoke test
+- Transactional email provider on a verified domain
+- Twilio A2P 10DLC registration for SMS
+- Terms of service and privacy policy, and attorney review of the question set
+- The first paying customer
 
-Larger deployments would justify centralized:
+**Later, as real usage shows the need:** CRM and calendar connectors (Google, Outlook), semantic retrieval for large knowledge bases, shared rate limits for multiple instances, and an evaluation suite that measures routing and grounding quality over time.
 
-Structured logging
-Metrics
-Distributed tracing
-Model latency tracking
-Model usage analytics
-Failure monitoring
-Tenant cost tracking
-Cost-per-conversation metrics
-Model Evaluation
+---
 
-A larger evaluation suite would measure:
+## Development approach
 
-Routing accuracy
-Retrieval quality
-Response grounding
-Escalation accuracy
-Prompt regressions
-Latency
-Cost per conversation
+Magni was built end to end as a solo project. AI coding agents were used as development tools, while product direction, architecture, security boundaries and validation stayed under my direction.
 
-The goal is to treat model behavior as measurable software behavior rather than something judged only through manual demos.
+The project goes deliberately past a chatbot demo, into the problems that show up when an LLM becomes part of a real SaaS product. How should tenant identity flow through AI workflows? How do you keep a model inside legal guardrails like Fair Housing? How do you bound AI cost? How do you test AI behavior and authorization boundaries instead of trusting a demo?
 
-Technology Stack
-Layer	Technology
-Backend	Python, Flask
-Database	PostgreSQL
-ORM	SQLAlchemy
-Migrations	Alembic
-AI	Claude Haiku 5.5 (Anthropic)
-Authentication	Server-side sessions, password hashing
-Billing	Stripe
-Frontend	HTML, CSS, JavaScript
-Deployment	Railway
-AI Architecture	Multi-Agent Orchestration
-Knowledge Retrieval	Tenant-Scoped Keyword Retrieval
-Scheduled Tasks	Railway Cron
-Development Approach
+---
 
-Magni was built end to end as a solo project.
+## About
 
-AI coding agents were used as development tools during implementation, but architectural decisions, product direction, debugging, integration, security boundaries, and validation remained under my direction.
+**Zakary Marmel**, Solo Architect & AI Software Engineer
 
-The project intentionally goes beyond a chatbot demonstration.
-
-It explores the engineering problems that appear when an LLM becomes part of a real SaaS application:
-
-How should multiple agents coordinate?
-How should tenant identity propagate through AI workflows?
-How should knowledge remain isolated?
-How should conversation data remain isolated?
-How should concurrent AI usage be limited?
-How should human escalation work?
-How should schema changes be managed safely?
-How should browser sessions be treated as untrusted input?
-How should AI costs be bounded?
-How should AI behavior and authorization boundaries be tested?
-How can the system eventually act through existing business tools without becoming the system of record itself?
-Status
-
-Pilot-readiness hardening in progress.
-
-Magni now has a substantially complete SaaS foundation including:
-
-Tenant signup and authentication
-Customer portal
-PostgreSQL tenant isolation
-PostgreSQL conversations and messages
-Tenant-scoped knowledge
-Multi-agent orchestration
-Knowledge-grounded responses
-Human escalation
-Usage controls
-Billing infrastructure
-Alembic-managed schema evolution
-Automated agent testing
-Conversation-ownership regression testing
-Embeddable website widget
-
-The immediate objective is to complete the remaining tenant settings, authentication hardening, integration testing, and live deployment work required for the first external pilot.
-
-The next major product milestone after that is lead and appointment capture, allowing Magni to move from answering customer questions to initiating real business workflows.
-
-About
-
-Zakary Marmel
-Solo Architect & AI Software Engineer
-
-I build AI-powered software systems that combine LLM capabilities with traditional application engineering.
-
-My professional operations background influences how I approach these systems: the goal is not simply to make an AI model produce impressive output, but to build software that fits into real workflows, has clear authorization and failure boundaries, controls operational cost, and remains understandable when something goes wrong.
+I build AI-powered software that combines LLM capabilities with traditional application engineering. My operations background shapes how I approach it. The goal isn't just impressive model output. It's software that fits real workflows, has clear authorization and failure boundaries, controls cost, and stays understandable when something goes wrong.
 
 GitHub: Z4kM4rm3l
 Portfolio: zakarymarmel.netlify.app
