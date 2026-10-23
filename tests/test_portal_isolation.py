@@ -5,6 +5,7 @@ import os, sys, types
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 os.environ.setdefault("SECRET_KEY", "test-secret")
+os.environ.setdefault("PUBLIC_BASE_URL", "https://app.example.com")
 
 # Stub the LLM at the wrapper (core.llm) so no SDK or network is needed.
 import core.llm as _llm

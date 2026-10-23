@@ -67,8 +67,10 @@ def apply_security_headers(app: Flask):
 
     @app.before_request
     def handle_preflight():
-        """Handle CORS preflight OPTIONS requests."""
-        if request.method == "OPTIONS":
+        """Handle CORS preflight OPTIONS requests for Magni's own pages.
+        The embeddable widget (/widget/*) runs on customers' sites and answers
+        its own preflights with per-client allowed domains (routes/widget.py)."""
+        if request.method == "OPTIONS" and not request.path.startswith("/widget/"):
             response = app.make_default_options_response()
             origin = request.headers.get("Origin", "")
             if origin in ALLOWED_ORIGINS:

@@ -7,3 +7,4 @@ psycopg2-binary
 SQLAlchemy>=2.0,<2.1
 bcrypt
 alembic==1.13.2
+tzdata>=2025.2

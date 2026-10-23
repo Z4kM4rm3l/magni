@@ -10,6 +10,7 @@ from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 os.environ.setdefault("SECRET_KEY", "test-secret")
+os.environ.setdefault("PUBLIC_BASE_URL", "https://app.example.com")
 os.environ["STRIPE_SECRET_KEY"] = "sk_test_dummy"
 os.environ["STRIPE_PRICE_STARTER"] = "price_starter_123"
 os.environ["STRIPE_PRICE_PROFESSIONAL"] = "price_pro_456"
@@ -73,7 +74,7 @@ import stripe
 # Notifications run inline and are recorded instead of sent.
 notifier.RUN_IN_BACKGROUND = False
 SENT = {"email": [], "sms": []}
-notifier.send_email = lambda to, subj, body, reply_to=None: SENT["email"].append((to, subj, body, reply_to)) or True
+notifier.send_email = lambda to, subj, body, reply_to=None, **kw: SENT["email"].append((to, subj, body, reply_to)) or True
 notifier.send_sms = lambda to, body: SENT["sms"].append((to, body)) or True
 
 failures = []
