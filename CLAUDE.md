@@ -1,6 +1,6 @@
 # Magni: notes for Claude Code
 
-Multi-tenant AI leasing assistant for rental businesses only: property managers, real estate agents' listings, and seasonal / vacation rental operators. Every account is `long_term` or `seasonal`. Python/Flask, SQLAlchemy + Alembic on PostgreSQL, Claude Haiku 5.5 via the Anthropic SDK, Stripe billing, deployed on Railway.
+Multi-tenant AI leasing assistant for rental businesses only: long-term rental property managers and seasonal / vacation rental operators (people looking to rent, or guests booking a shorter stay). Home sales are out of scope. Every account is `long_term` or `seasonal`. Python/Flask, SQLAlchemy + Alembic on PostgreSQL, Claude Haiku 5.5 via the Anthropic SDK, Stripe billing, deployed on Railway.
 
 ## Owner preferences
 - Zak works at the architecture level and relies on you for code. Explain what you changed and why in plain language.

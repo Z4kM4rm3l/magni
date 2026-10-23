@@ -2,7 +2,7 @@
 
 ## AI Leasing Assistant for Rental Businesses
 
-Magni is a multi-tenant AI leasing assistant for property managers, real estate agents, and seasonal / vacation rental operators. It sits on the business's own website, answers prospects from the business's own listings, asks a fixed, Fair Housing friendly set of pre-qualifying questions, books tours on the business's calendar, and sends every lead to the owner the moment it comes in. Owners keep control over knowledge grounding, escalation, tenant isolation, usage, and AI costs.
+Magni is a multi-tenant AI leasing assistant for long-term rental property managers and seasonal / vacation rental operators. It sits on the business's own website, answers prospects from the business's own listings, asks a fixed, Fair Housing friendly set of pre-qualifying questions, books tours on the business's calendar, and sends every lead to the owner the moment it comes in. Owners keep control over knowledge grounding, escalation, tenant isolation, usage, and AI costs.
 
 Rather than relying on a single general-purpose chatbot, Magni uses a coordinated set of specialized agents behind an orchestration layer. Customer requests can be classified, answered using tenant-specific knowledge, escalated to a human, and persisted for later analytics.
 

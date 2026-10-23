@@ -31,9 +31,18 @@ SELF_SERVE_PLANS = {
         "name": "Pro",
         "price": PLAN_PRICES["professional"],
         "price_env": "STRIPE_PRICE_PROFESSIONAL",
-        "blurb": "5,000 conversations/mo, everything in Starter",
+        "blurb": "5,000 conversations/mo, everything in Starter, no \"Powered by Magni\" link",
     },
 }
+
+# Plans that may hide the small "Powered by Magni" link in the widget. Starter
+# and trials show it: it's free marketing and a reason to upgrade.
+UNBRANDED_TIERS = {"professional", "enterprise", "unlimited"}
+
+
+def shows_branding(client) -> bool:
+    return (client.tier or "starter") not in UNBRANDED_TIERS
+
 
 # Stripe subscription statuses that keep the assistant answering. past_due is
 # included so Stripe's automatic retries get a grace period before cut-off.

@@ -176,6 +176,17 @@ resp, es2 = chat("Hola, busco un apartamento para rentar")
 resp, _ = chat("No gracias", es2)
 check("Spanish opt-out gets the Spanish reply", resp == t("opt_out", "es"))
 
+# --- Spanish cancel page ---
+d = _db.SessionLocal(); tok = d.query(Appointment).first().cancel_token; d.close()
+page = w.get(f"/appt/{tok}").get_data(as_text=True)
+check("cancel page is in Spanish for a Spanish lead", 'lang="es"' in page and "Cancelar cita" in page and "Confirmada" in page)
+check("cancel page shows the Spanish time", any(day + "," in page for day in ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")))
+with w.session_transaction() as s_:
+    s_["_csrf_token"] = "pt"
+page = w.post(f"/appt/{tok}/cancel", data={"csrf_token": "pt"}).get_data(as_text=True)
+check("Spanish cancel confirmation", "Su cita quedó cancelada" in page)
+check("unknown cancel link shows the English not-found page", "find that appointment" in w.get("/appt/nope").get_data(as_text=True))
+
 # --- Spanish slot parsing ---
 from datetime import date
 check("Spanish day and time parse", S._parse_day("el sábado", date(2026, 10, 23)) == date(2026, 10, 24)
@@ -183,6 +194,20 @@ check("Spanish day and time parse", S._parse_day("el sábado", date(2026, 10, 23
 check("'por la mañana' is a part of day, not tomorrow", S._parse_day("por la mañana", date(2026, 10, 23)) is None
       and S._parse_time("por la mañana")[0] == "window")
 check("Spanish ordinal picks", S._pick_number("la segunda", 3) == 2 and S._pick_number("el último", 3) == 3)
+
+# --- Powered by Magni link ---
+from routes.widget import _MAGNI_JS
+cfg = w.get("/widget/config?key=" + KEY).get_json()
+check("trial / Starter widget shows the Powered by Magni link", cfg.get("branding") is True)
+d = _db.SessionLocal(); d.query(Client).filter(Client.api_key == KEY).first().tier = "professional"; d.commit(); d.close()
+check("Pro widget hides it", w.get("/widget/config?key=" + KEY).get_json().get("branding") is False)
+check("widget builds the link as text, only when branding is on",
+      "if (config.branding)" in _MAGNI_JS and "link.textContent = 'Powered by Magni'" in _MAGNI_JS)
+
+# --- Rentals only: no home sales ---
+from agents.resolver_agent import MAGNI_SYSTEM_PROMPT
+check("assistant prompt no longer mentions real estate agents", "real estate" not in MAGNI_SYSTEM_PROMPT.lower())
+check("landing page no longer mentions real estate agents", "real estate" not in w.get("/").get_data(as_text=True).lower())
 
 print()
 if failures:

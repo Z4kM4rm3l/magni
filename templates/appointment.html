@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ tx.html_lang }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
-  <title>Your appointment</title>
+  <title>{{ tx.title }}</title>
   <style>
     :root { --bg:#f6f6f7; --card:#fff; --text:#18181b; --dim:#6b6b73; --border:#e4e4e7; --accent:#b45309; }
     @media (prefers-color-scheme: dark) { :root { --bg:#0f0f11; --card:#1a1a1e; --text:#e8e8ea; --dim:#9b9b9b; --border:#2a2a30; --accent:#f59e0b; } }
@@ -27,22 +27,22 @@
   <div class="wrap">
     <div class="card">
       {% if appt %}
-        <h1>{{ business or "Your appointment" }}</h1>
-        <div class="when">{{ appt.when }}</div>
+        <h1>{{ business or tx.heading }}</h1>
+        <div class="when">{{ appt.when_es if lang == "es" else appt.when }}</div>
         {% if appt.property %}<div class="dim">{{ appt.property }}</div>{% endif %}
         {% if details %}<p class="dim">{{ details }}</p>{% endif %}
-        <span class="status {{ appt.status }}">{{ "Confirmed" if appt.status == "booked" else "Canceled" }}</span>
-        {% if done %}<p class="ok">Your appointment is canceled. {{ business or "The team" }} has been notified.</p>{% endif %}
+        <span class="status {{ appt.status }}">{{ tx.confirmed if appt.status == "booked" else tx.canceled }}</span>
+        {% if done %}<p class="ok">{{ tx.done.format(biz=(business or tx.the_team)) }}</p>{% endif %}
         {% if error %}<p class="err">{{ error }}</p>{% endif %}
         {% if can_cancel %}
-          <form method="post" action="/appt/{{ token }}/cancel" onsubmit="return confirm('Cancel this appointment?');">
+          <form method="post" action="/appt/{{ token }}/cancel" onsubmit="return confirm({{ tx.confirm|tojson|forceescape }});">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit">Cancel appointment</button>
+            <button type="submit">{{ tx.cancel_btn }}</button>
           </form>
-          <p class="dim" style="margin-top:0.8rem">To reschedule, cancel here and pick a new time in the chat on our website, or reply to your confirmation email.</p>
+          <p class="dim" style="margin-top:0.8rem">{{ tx.reschedule }}</p>
         {% endif %}
       {% else %}
-        <h1>Appointment</h1>
+        <h1>{{ tx.generic }}</h1>
         <p class="err">{{ error }}</p>
       {% endif %}
     </div>
