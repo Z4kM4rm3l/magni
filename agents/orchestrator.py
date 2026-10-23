@@ -8,6 +8,7 @@ import agents.resolver_agent as _resolver_mod
 import agents.escalation_agent as _escalation_mod
 from core import lead_flow as _lead_flow
 from core.leasing import check_output, detect_accommodation, looks_like_leasing
+from core.i18n import detect_lang
 
 
 def _summarize_history(history: list) -> str:
@@ -98,18 +99,22 @@ class Orchestrator:
         rental = _lead_flow.is_rental(ctx)
         vertical = ctx["vertical"] if ctx else "long_term"
 
+        extra_note = ""  # fixed text appended to the final reply (residents)
+
         def finish(result: dict) -> dict:
             result.setdefault("session_id", session_id)
             result["client_id"] = resolved_client_id
             # Intake replies are already filtered (side answers) or fixed text.
             if rental and result.get("route") != "leasing":
-                safe, flagged = check_output(result.get("response", ""))
+                safe, flagged = check_output(result.get("response", ""), detect_lang(message))
                 if flagged:
                     logger.warning(
                         f"Fair Housing filter replaced a reply (client={str(resolved_client_id)[:8]} "
                         f"session={session_id[:8]} flagged={flagged})"
                     )
                     result["response"] = safe
+            if extra_note:
+                result["response"] = f"{result.get('response', '').rstrip()}\n\n{extra_note}".strip()
             return result
 
         forced_escalation = None
@@ -140,6 +145,12 @@ class Orchestrator:
         intent = triage_result["intent"]
         route = triage_result["route"]
         escalation_reason = triage_result.get("escalation_reason")
+
+        # Current residents get the owner's office contact (and a 911 line in an
+        # emergency) added to whatever the assistant says. They never start the
+        # leasing intake and never become leads.
+        if rental and intent == "resident":
+            extra_note = _lead_flow.resident_note(ctx, message)
 
         if rental and route != "escalation" and (
             intent == "leasing"
@@ -184,6 +195,7 @@ class Orchestrator:
             "vertical": vertical,
             "bot_name": (ctx or {}).get("bot_name", ""),
             "business_name": (ctx or {}).get("business_name", ""),
+            "properties": ((ctx or {}).get("config") or {}).get("properties") or [],
         })
 
         # ── ESCALATION — resolver-directed ───────────────────────────────────
