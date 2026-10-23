@@ -21,12 +21,19 @@ and criteria reviewed by their own counsel.
 """
 import re
 
+# Magni serves rental businesses only. Every account is one of these.
 VERTICALS = {
-    "general": "General business",
     "long_term": "Long-term rentals",
     "seasonal": "Seasonal / vacation rentals",
 }
 RENTAL_VERTICALS = {"long_term", "seasonal"}
+DEFAULT_VERTICAL = "long_term"
+
+
+def vertical_of(value) -> str:
+    """The account's business type, falling back to long-term rentals for
+    anything unknown (including the retired "general" type)."""
+    return value if value in VERTICALS else DEFAULT_VERTICAL
 
 # ── Question catalog ────────────────────────────────────────────────────────
 # Order here IS the order asked. Wording is fixed on purpose.

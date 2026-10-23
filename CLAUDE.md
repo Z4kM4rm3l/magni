@@ -1,6 +1,6 @@
 # Magni: notes for Claude Code
 
-Multi-tenant AI chat assistant for small businesses, focused on property managers and seasonal rental operators. Python/Flask, SQLAlchemy + Alembic on PostgreSQL, Claude Haiku 5.5 via the Anthropic SDK, Stripe billing, deployed on Railway.
+Multi-tenant AI leasing assistant for rental businesses only: property managers, real estate agents' listings, and seasonal / vacation rental operators. Every account is `long_term` or `seasonal`. Python/Flask, SQLAlchemy + Alembic on PostgreSQL, Claude Haiku 5.5 via the Anthropic SDK, Stripe billing, deployed on Railway.
 
 ## Owner preferences
 - Zak works at the architecture level and relies on you for code. Explain what you changed and why in plain language.
@@ -14,6 +14,7 @@ python tests/test_leasing_mvp.py        # billing, leasing intake, Fair Housing 
 python tests/test_scheduler.py          # built-in scheduler (booking, cancel, reminders, widget CORS)
 python tests/test_portal_isolation.py   # tenant isolation + CSRF
 python tests/test_launch_fixes.py       # usage per conversation, trial resets, key + login hardening
+python tests/test_rental_focus.py       # rental-only prompts, leasing analytics, tiers, demo account, migration 0007
 python tests/test_conversation_ownership.py
 python tests/test_orchestrator.py
 ```
@@ -22,8 +23,9 @@ Each suite prints `ALL PASSED` (orchestrator prints `PASS`). They run on in-memo
 `tests/test_triage_agent.py`, `test_resolver_agent.py`, `test_escalation_agent.py` call the real Claude API and need `ANTHROPIC_API_KEY`.
 
 ## Map
-- `app.py`: Flask app, admin + client portal routes, `/api/portal/*` JSON APIs, public `/appt/<token>` cancel page.
+- `app.py`: Flask app, landing page with the live demo (`/`), admin + client portal routes, `/api/portal/*` JSON APIs, public `/appt/<token>` cancel page.
 - `agents/`: `orchestrator.py` (entry point for every chat turn), `triage_agent`, `resolver_agent`, `escalation_agent`, `lead_agent` (extracts intake answers).
+- `scripts/create_demo_client.py` / `reset_demo_daily.py`: the landing-page demo account (a sample rental). It never emails or texts anyone.
 - `core/llm.py`: the ONLY place that calls the model. `generate()` / `chat()`; model from `CLAUDE_MODEL` (default `claude-haiku-5-5`). Tests stub these two functions.
 - `core/leasing.py`: question catalog, presets, config validation, Fair Housing guardrails (`check_output`, `detect_accommodation`).
 - `core/lead_flow.py`: deterministic intake engine (what to ask, in what order), booking step, alerts, partial-lead sweep, reminders.

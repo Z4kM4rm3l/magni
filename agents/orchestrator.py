@@ -96,7 +96,7 @@ class Orchestrator:
             logger.error(f"lead sweep error: {e}")
         ctx = _lead_flow.load_client_context(resolved_client_id)
         rental = _lead_flow.is_rental(ctx)
-        vertical = ctx["vertical"] if ctx else "general"
+        vertical = ctx["vertical"] if ctx else "long_term"
 
         def finish(result: dict) -> dict:
             result.setdefault("session_id", session_id)

@@ -50,7 +50,7 @@ def load_client_context(client_id: str) -> dict | None:
         c = db.get(Client, client_id)
         if not c:
             return None
-        vertical = c.vertical or "general"
+        vertical = L.vertical_of(c.vertical)
         return {
             "client_id": c.id,
             "business_name": c.business_name or "",
@@ -77,7 +77,18 @@ def _alert_targets(ctx):
 
 
 # ── Notifications ───────────────────────────────────────────────────────────
+# The landing-page demo never emails or texts anyone: visitors type any
+# address they like there, and the demo has no owner to alert.
+DEMO_CLIENT_ID = "demo"
+
+
+def _is_demo(ctx) -> bool:
+    return bool(ctx) and ctx.get("client_id") == DEMO_CLIENT_ID
+
+
 def _send_alert(ctx, lead, kind):
+    if _is_demo(ctx):
+        return
     to_email, to_phone = _alert_targets(ctx)
     lead_d = leads_store.lead_to_dict(lead, ctx["config"])
     appt = getattr(lead, "_new_appt", None)
@@ -90,6 +101,8 @@ def _send_alert(ctx, lead, kind):
 
 
 def _send_booking_emails(ctx, appt):
+    if _is_demo(ctx):
+        return
     sched = _schedule(ctx)
     a = S.appt_to_dict(appt, sched)
     to_email, _ = _alert_targets(ctx)
@@ -728,6 +741,8 @@ def on_appointment_canceled(appt, by: str) -> None:
                 db.commit()
         finally:
             db.close()
+    if _is_demo(ctx):
+        return
     to_email, _ = _alert_targets(ctx)
     notifier.send_appointment_emails(
         "canceled_by_prospect" if by == "prospect" else "canceled_by_owner",
@@ -746,6 +761,8 @@ def send_due_reminders() -> int:
                 continue
             ctx = load_client_context(appt.client_id)
             if not ctx or not appt.email or not S.claim_reminder(db, appt.id):
+                continue
+            if _is_demo(ctx):
                 continue
             sched = _schedule(ctx)
             to_email, _ = _alert_targets(ctx)

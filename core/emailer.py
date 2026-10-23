@@ -87,7 +87,7 @@ def _build_transcript(history: list) -> str:
     recent = history[-4:]
     lines = []
     for msg in recent:
-        role = "Customer" if msg.get("role") == "user" else "Magni"
+        role = "Visitor" if msg.get("role") == "user" else "Assistant"
         content = msg.get("content", "")[:300]
         lines.append(f"{role}: {content}")
     return "\n\n".join(lines)

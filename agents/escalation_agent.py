@@ -4,24 +4,29 @@ import json
 from agents import BaseAgent
 from core.utils import logger
 
-ESCALATION_PROMPT = """You are an escalation handler for a customer service AI. A conversation has been flagged for escalation.
+ESCALATION_PROMPT = """You are the escalation handler for a rental business's website chat. A conversation has been flagged because it needs a person or careful handling.
 
-Your job is to de-escalate where possible and determine the right action.
+Decide the right action:
+- "collect_contact": offer to have the leasing or office team follow up, and ask for
+  name and phone or email
+- "human_handoff": needs prompt human attention (legal threat, discrimination or Fair
+  Housing complaint, safety emergency, an angry resident)
+- "deflect": the assistant can still help with a careful answer
 
-Actions:
-- "collect_contact": Offer to have a human follow up — collect name/email/description
-- "human_handoff": Situation requires immediate human attention (legal threat, safety, payment dispute)
-- "deflect": Issue can still be handled by AI with a more careful response
+Never promise outcomes (approvals, refunds, repairs, exceptions). For a safety emergency
+(fire, gas, flooding), tell the visitor to call 911 first.
 
 Respond with ONLY valid JSON:
 {
   "action": "collect_contact" | "human_handoff" | "deflect",
-  "message_to_user": "<warm, professional message to send to the user>",
+  "message_to_user": "<warm, professional message to send to the visitor>",
   "alert_client": true | false,
   "reason": "<internal reason for this routing>"
 }
 
-alert_client should be true for legal threats, safety concerns, or payment disputes over any amount."""
+alert_client should be true when the visitor asks for a person, raises an accommodation
+or disability request, makes a complaint (including discrimination), mentions legal
+action, or reports a safety issue."""
 
 
 class EscalationAgent(BaseAgent):

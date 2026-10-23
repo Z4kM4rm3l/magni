@@ -341,13 +341,12 @@
         const res = await fetch('/api/portal/analytics');
         if (!res.ok) throw new Error('bad status');
         const d = await res.json();
-        const rr = d.resolution_rate.month, sat = d.satisfaction.month;
         document.getElementById('kpis').innerHTML =
-          kpi('Conversations (30d)', d.totals.month) +
-          kpi('All time', d.totals.all_time) +
-          kpi('Resolution rate', rr != null ? rr + '%' : 'N/A') +
-          kpi('Avg messages', d.avg_messages.month) +
-          kpi('Satisfaction', sat ? sat + '/5' : 'N/A');
+          kpi('Conversations (30d)', d.conversations) +
+          kpi('Leads (30d)', d.leads_complete + d.leads_partial) +
+          kpi('After hours', d.leads_after_hours) +
+          kpi('Tours booked', d.tours_booked) +
+          kpi('Upcoming tours', d.tours_upcoming);
       } catch (e) { document.getElementById('kpis').textContent = 'Could not load analytics.'; }
     }
 
