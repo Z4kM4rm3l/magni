@@ -231,9 +231,12 @@ _MAGNI_JS = r"""
     var panel = document.createElement('div');
     panel.id = 'mgn-panel';
     panel.innerHTML =
-      '<div id="mgn-header">' + (config.bot_name || 'Magni') + '</div>' +
+      '<div id="mgn-header"></div>' +
       '<div id="mgn-messages"></div>' +
       '<div id="mgn-footer"><input id="mgn-input" type="text" placeholder="Type a message..."/><button id="mgn-send">Send</button></div>';
+
+    // Owner-typed text goes in as text, never as HTML.
+    panel.querySelector('#mgn-header').textContent = config.bot_name || 'Leasing Assistant';
 
     document.body.appendChild(bubble);
     document.body.appendChild(panel);

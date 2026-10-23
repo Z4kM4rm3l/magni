@@ -94,7 +94,7 @@ def _check_demo_limit():
     """
     Atomically checks and increments the demo account usage counter.
     Returns (allowed: bool, reason: str).
-    Fails OPEN only if DB is unreachable â€” demo is non-critical path.
+    Fails closed if the database is unreachable.
     """
     try:
         db = SessionLocal()
@@ -114,7 +114,7 @@ def _check_demo_limit():
         return True, "ok"
     except Exception as e:
         logger.error(f"Demo limit check failed: {e}")
-        return True, "ok"  # Fail open â€” demo is non-critical
+        return False, "demo_suspended"  # fail closed: never spend API money we can't count
  
 # â”€â”€ CHAT ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
@@ -151,6 +151,10 @@ def chat():
     # Paying clients send X-Magni-API-Key header â€” skip the demo guard.
     api_key = request.headers.get("X-Magni-API-Key", "").strip()
     is_paying_client = bool(api_key and api_key != DEMO_API_KEY)
+    # Customer keys are public (they sit in the embed snippet), so they only
+    # work through /widget/chat, which enforces allowed domains and rate limits.
+    if is_paying_client:
+        return jsonify({"error": "Use the website widget (/widget/chat) with this key."}), 403
  
     if not is_paying_client:
         allowed, reason = _check_demo_limit()
@@ -830,6 +834,23 @@ def clients_activate(client_id):
 @app.route("/api/clients/<client_id>", methods=["DELETE"])
 @api_login_required
 def clients_delete(client_id):
+    # Stop billing first: deleting the row alone would leave Stripe charging
+    # a customer who no longer has an account.
+    db = SessionLocal()
+    try:
+        c = db.get(Client, client_id)
+        sub_id = c.stripe_subscription_id if c else None
+        status = (c.subscription_status or "").lower() if c else ""
+    finally:
+        db.close()
+    if sub_id and status not in ("canceled", "incomplete_expired"):
+        try:
+            import stripe
+            stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+            stripe.Subscription.cancel(sub_id)
+        except Exception as e:
+            logger.error(f"clients_delete: could not cancel Stripe subscription for {client_id[:8]}: {e}")
+            return jsonify({"error": "Could not cancel this client's Stripe subscription, so nothing was deleted. Cancel it in Stripe and try again."}), 502
     success = delete_client(client_id)
     if not success:
         return jsonify({"error": "Client not found"}), 404
