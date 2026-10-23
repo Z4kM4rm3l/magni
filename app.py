@@ -341,6 +341,17 @@ def portal_kb_delete(article_id):
     return jsonify({"status": "deleted"})
 
 
+@app.route("/api/portal/insights", methods=["GET"])
+@client_login_required
+def portal_insights():
+    from core.insights import build_insights
+    client = get_client(current_client_id())
+    if not client:
+        return jsonify({"error": "Client not found"}), 404
+    days = request.args.get("days", 30, type=int)
+    return jsonify(build_insights(client["client_id"], client["lead_config"], days))
+
+
 @app.route("/api/portal/analytics", methods=["GET"])
 @client_login_required
 def portal_analytics():
@@ -781,6 +792,18 @@ def clients_delete(client_id):
  
 # â”€â”€ ANALYTICS ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
+@app.route("/api/analytics/insights", methods=["GET"])
+@api_login_required
+def analytics_insights():
+    from core.insights import build_insights
+    client_id, err = _resolve_admin_client_id(request.args)
+    if err:
+        return err
+    client = get_client(client_id)
+    return jsonify(build_insights(client_id, (client or {}).get("lead_config") or {},
+                                  request.args.get("days", 30, type=int)))
+
+
 @app.route("/api/analytics", methods=["GET"])
 @api_login_required
 def analytics_data():
