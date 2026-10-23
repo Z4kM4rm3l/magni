@@ -6,7 +6,7 @@ from core.leasing import RENTAL_VERTICALS
 from core.knowledge_base import get_kb_context
 from core.utils import logger
 
-MAGNI_SYSTEM_PROMPT = """You are Magni, a warm, professional, and highly capable AI customer service agent.
+MAGNI_SYSTEM_PROMPT = """You are a warm, professional, and highly capable AI assistant.
 
 Your personality:
 - Human-forward: You lead with empathy before solutions
@@ -35,6 +35,16 @@ _ESCALATION_SIGNALS = [
 ]
 
 
+def identity_line(payload: dict) -> str:
+    """Who the assistant is, from the owner's own settings, so the name in the
+    chat window and the name the assistant gives always match."""
+    bot = (payload.get("bot_name") or "").strip() or "the virtual assistant"
+    biz = (payload.get("business_name") or "").strip()
+    who = f"You are {bot}, the AI assistant for {biz}." if biz else f"You are {bot}, an AI assistant."
+    return (who + " If asked your name, give that name. If asked whether you are a person, "
+            "say you are an AI assistant and that the team can follow up.")
+
+
 class ResolverAgent(BaseAgent):
     def run(self, payload: dict) -> dict:
         message = payload.get("message", "")
@@ -50,7 +60,7 @@ class ResolverAgent(BaseAgent):
             flow_context = get_flow_context(intent)
             kb_context = get_kb_context(client_id, message) if client_id else ""
 
-            full_system = f"{MAGNI_SYSTEM_PROMPT}\n\n{flow_context}"
+            full_system = f"{identity_line(payload)}\n\n{MAGNI_SYSTEM_PROMPT}\n\n{flow_context}"
             if vertical in RENTAL_VERTICALS:
                 full_system += f"\n\n{RENTAL_RULES}"
             if extra_instructions:

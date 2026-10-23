@@ -7,14 +7,14 @@ Four independent safeguards — ALL must pass before the LLM is called.
 Layer 1: Atomic DB increment with SELECT FOR UPDATE (race condition proof)
 Layer 2: Hard fail-closed on any DB error (no silent bypass)
 Layer 3: Global daily spend cap across ALL clients combined
-Layer 4: Google Cloud budget alert (set in GCP console — external to code)
+Layer 4: Anthropic workspace monthly spend limit (set in the Claude Console, outside the code)
 """
 import os
 from typing import Tuple, Optional
 from datetime import date
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from core.models import Client
+from core.models import Client, Conversation
 from core.billing_policies import TIER_LIMITS, billing_entitlement
 from core.utils import logger
 
@@ -30,6 +30,16 @@ VISITOR_UNAVAILABLE = (
 # At ~$0.0001 per call this caps your daily exposure at roughly $1.
 # Change this as your client base grows.
 GLOBAL_DAILY_CAP = 10_000
+
+# Plans are sold by the conversation, so one chat counts once however many
+# messages it has. A single chat is capped so it can't become free unlimited
+# usage. Counted in visitor messages.
+MAX_MESSAGES_PER_CONVERSATION = 40
+
+CONVERSATION_TOO_LONG = (
+    "This chat has gotten long, so I can't keep going here. "
+    "Please contact us directly and we'll be glad to help."
+)
 
 # In-memory daily counter (resets when Railway restarts, which is fine —
 # it's a secondary layer, not the primary one)
@@ -60,10 +70,15 @@ def _check_global_cap() -> Tuple[bool, str]:
 
 
 def track_and_validate_request(
-    db: Session, api_key: str
+    db: Session, api_key: str, session_id: str | None = None
 ) -> Tuple[bool, str, Optional[Client]]:
     """
     Layer 1 + 2: Atomic per-client check with hard fail-closed.
+
+    Usage is counted per conversation: the first message of a session_id
+    counts against the monthly limit; later messages in that conversation
+    don't, up to MAX_MESSAGES_PER_CONVERSATION. A conversation already under
+    way may finish after the limit is reached; new ones are refused.
 
     Uses SELECT FOR UPDATE to lock the client row during the check+increment,
     preventing race conditions where two simultaneous requests both pass
@@ -108,6 +123,23 @@ def track_and_validate_request(
             else TIER_LIMITS.get(tier, TIER_LIMITS["starter"])
         )
         used = client.monthly_used or 0
+
+        existing = None
+        if session_id:
+            existing = (
+                db.query(Conversation.message_count)
+                .filter(Conversation.session_id == session_id, Conversation.client_id == client.id)
+                .first()
+            )
+        if existing is not None:
+            # message_count holds both sides of the chat.
+            if (existing[0] or 0) >= 2 * MAX_MESSAGES_PER_CONVERSATION:
+                logger.warning(f"client_guard: client {client.id[:8]} conversation {session_id[:8]} hit the per-chat cap")
+                return False, CONVERSATION_TOO_LONG, None
+            global_ok, _ = _check_global_cap()
+            if not global_ok:
+                return False, "Service temporarily unavailable. Please try again later.", None
+            return True, "Authorized", client
 
         # -1 sentinel = unlimited (Enterprise custom plan)
         if limit != -1 and used >= limit:

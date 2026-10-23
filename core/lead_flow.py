@@ -54,6 +54,7 @@ def load_client_context(client_id: str) -> dict | None:
         return {
             "client_id": c.id,
             "business_name": c.business_name or "",
+            "bot_name": c.bot_name or "",
             "email": c.email or "",
             "vertical": vertical,
             "config": L.normalize_lead_config(c.lead_config, vertical),

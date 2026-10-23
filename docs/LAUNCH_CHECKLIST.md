@@ -59,7 +59,7 @@ Prospects who give a phone or email and then stop replying get sent to the owner
 
 Optional: a daily cron service for `python scripts/reset_monthly_usage.py` (e.g. `0 9 * * *`) with `DATABASE_URL` and `STRIPE_SECRET_KEY`, which resets monthly message counts.
 
-The web service's **Start Command** should be `python app.py`.
+The web service's **Start Command** should be `gunicorn --workers 1 --threads 8 --timeout 120 app:app` (already set in `railway.json` and `Procfile`). Keep one worker and one replica: the login lockout, rate limits and global cap live in that process's memory.
 
 ## 6. Smoke test (test mode)
 

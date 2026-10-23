@@ -6,8 +6,23 @@
 |-------|-------|-------------|-------|
 | 1 | client_guard.py | Atomic DB row lock (SELECT FOR UPDATE) — race condition proof | Closed |
 | 2 | client_guard.py | Any exception = request blocked, never silently allowed | Closed |
-| 3 | client_guard.py | Global 10,000 req/day cap across ALL clients combined | Closed |
+| 3 | client_guard.py | Global 10,000 messages/day cap across ALL clients combined | Closed |
 | 4 | Claude Console | Monthly spend limit on the API workspace Magni uses | External |
+
+## How usage is counted
+
+Plans are sold by the conversation. The first message of a chat counts once
+against the client's monthly limit; the rest of that chat is free, up to 40
+visitor messages (`MAX_MESSAGES_PER_CONVERSATION`), after which the chat is
+politely closed. A chat already under way may finish after the monthly limit
+is hit; new chats are refused with the neutral unavailable message.
+
+`scripts/reset_monthly_usage.py` resets paying clients at each Stripe renewal
+and operator-managed clients on every run. Trial accounts are never reset:
+a trial gets one allowance for its whole 14 days.
+
+Customer API keys are public (they sit in the embed snippet), so they only
+work through `/widget/chat`, which checks allowed domains and rate limits.
 
 ## Layer 4 Setup (DO THIS ONCE in the Claude Console)
 

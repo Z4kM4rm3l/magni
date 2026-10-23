@@ -18,12 +18,11 @@ _login_attempts: dict = {}
 
 
 def _get_client_ip() -> str:
-    """Return real IP, respecting Railway's proxy headers."""
-    return (
-        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-        or request.remote_addr
-        or "unknown"
-    )
+    """Return the real client IP. ProxyFix (app.py) already rewrites
+    remote_addr from the one X-Forwarded-For hop Railway adds. Reading the
+    header ourselves would trust its first entry, which the visitor controls,
+    and let a brute-forcer pick a new "IP" on every guess."""
+    return request.remote_addr or "unknown"
 
 
 def _is_locked_out(ip: str) -> bool:
@@ -33,8 +32,10 @@ def _is_locked_out(ip: str) -> bool:
         return False
     if record["locked_until"] and time.time() < record["locked_until"]:
         return True
-    # Lockout expired — reset
-    _login_attempts.pop(ip, None)
+    if record["locked_until"]:
+        # Lockout expired: start counting again. (A record that was never
+        # locked keeps its count, or failures would never add up to a lockout.)
+        _login_attempts.pop(ip, None)
     return False
 
 

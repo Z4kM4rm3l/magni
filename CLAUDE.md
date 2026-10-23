@@ -13,6 +13,7 @@ pip install -r requirements.txt
 python tests/test_leasing_mvp.py        # billing, leasing intake, Fair Housing guardrails, alerts
 python tests/test_scheduler.py          # built-in scheduler (booking, cancel, reminders, widget CORS)
 python tests/test_portal_isolation.py   # tenant isolation + CSRF
+python tests/test_launch_fixes.py       # usage per conversation, trial resets, key + login hardening
 python tests/test_conversation_ownership.py
 python tests/test_orchestrator.py
 ```

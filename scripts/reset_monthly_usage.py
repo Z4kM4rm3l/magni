@@ -8,8 +8,10 @@ Run directly: python scripts/reset_monthly_usage.py
 Two reset paths:
   1. Stripe-managed clients — resets monthly_used only when Stripe confirms
      the billing period has rolled over.
-  2. Manually-managed clients (stripe_subscription_id IS NULL, id != 'demo')
-     — resets unconditionally on every run. Billing dates managed externally.
+  2. Operator-managed clients (no Stripe subscription and no trial clock,
+     id != 'demo') — resets unconditionally on every run. Billing dates are
+     managed outside Stripe. Trial accounts are never reset: a trial gets one
+     allowance for its whole length.
 """
 import os
 import sys
@@ -75,6 +77,7 @@ def reset_monthly_usage() -> None:
         manual_clients = db.query(Client).filter(
             Client.is_active == True,
             Client.stripe_subscription_id.is_(None),
+            Client.trial_ends_at.is_(None),
             Client.id != "demo",
         ).all()
 

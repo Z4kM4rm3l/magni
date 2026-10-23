@@ -58,7 +58,7 @@ class Orchestrator:
         if api_key:
             db = SessionLocal()
             try:
-                allowed, reason, client = track_and_validate_request(db, api_key)
+                allowed, reason, client = track_and_validate_request(db, api_key, session_id)
                 if not allowed:
                     db.close()
                     return {
@@ -182,6 +182,8 @@ class Orchestrator:
             "history": history,
             "client_id": resolved_client_id,
             "vertical": vertical,
+            "bot_name": (ctx or {}).get("bot_name", ""),
+            "business_name": (ctx or {}).get("business_name", ""),
         })
 
         # ── ESCALATION — resolver-directed ───────────────────────────────────
