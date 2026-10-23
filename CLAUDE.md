@@ -16,6 +16,7 @@ python tests/test_portal_isolation.py   # tenant isolation + CSRF
 python tests/test_launch_fixes.py       # usage per conversation, trial resets, key + login hardening
 python tests/test_rental_focus.py       # rental-only prompts, leasing analytics, tiers, demo account, migration 0007
 python tests/test_market_features.py    # residents, after-hours tags, Spanish intake + booking, multiple properties
+python tests/test_account_emails.py     # SMTP provider, forgot password, 80% / limit usage warnings
 python tests/test_conversation_ownership.py
 python tests/test_orchestrator.py
 ```
@@ -48,7 +49,7 @@ Each suite prints `ALL PASSED` (orchestrator prints `PASS`). They run on in-memo
 - **Links** in emails and chat come from `PUBLIC_BASE_URL` only; the app refuses to start in production without it.
 
 ## Required env vars (Railway)
-`SECRET_KEY`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL`, `ALLOWED_ORIGINS`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (hash), `MAGNI_SMTP_FROM`, `MAGNI_SMTP_PASSWORD`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PROFESSIONAL`. Optional: `CLAUDE_MODEL`, `CLAUDE_FAST_MODEL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`.
+`SECRET_KEY`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL`, `ALLOWED_ORIGINS`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (hash), `MAGNI_SMTP_FROM`, `MAGNI_SMTP_PASSWORD`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PROFESSIONAL`. Email provider: `MAGNI_SMTP_HOST`, `MAGNI_SMTP_PORT`, `MAGNI_SMTP_USER` (Gmail if unset; use a transactional provider in production). Optional: `CLAUDE_MODEL`, `CLAUDE_FAST_MODEL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`.
 
 ## Status (Oct 2026)
 Built: trial + Stripe billing, leasing pre-qualification with instant email/SMS alerts, Leads tab, built-in scheduler with confirmations/reminders, Claude Haiku 5.5. Not yet done: Railway deploy + live smoke test, Twilio A2P 10DLC registration for SMS, a first paying customer.

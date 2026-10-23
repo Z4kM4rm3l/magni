@@ -25,7 +25,9 @@ from core.auth import login_required, api_login_required, attempt_login, logout,
 from core.client_auth import (
     authenticate_client, set_client_password, email_exists,
     log_in_client, log_out_client, current_client_id, client_login_required,
+    make_reset_token, check_reset_token,
 )
+from core import notifier
 from core.csrf import get_csrf_token, rotate_csrf_token, csrf_valid
 from core.billing_policies import TRIAL_DAYS, SELF_SERVE_PLANS, TIER_LIMITS
 from core.leasing import (
@@ -174,6 +176,52 @@ def client_login():
             return redirect(url_for("client_portal"))
         return render_template("client_login.html", error="Invalid email or password.")
     return render_template("client_login.html", error=None)
+
+
+# Forgot password: the same answer whether or not the email has an account,
+# so this page can't be used to find out who's a customer.
+_RESET_SENT = "If that email has a Magni account, we've sent a link to reset the password. It works for one hour."
+
+
+@app.route("/client/forgot", methods=["GET", "POST"])
+def client_forgot():
+    if request.method == "POST":
+        if not csrf_valid():
+            return render_template("forgot_password.html", error="Your session expired. Please try again.", sent=None), 403
+        email = request.form.get("email", "").strip().lower()
+        if not (rate_limit.hit(f"forgot-ip:{request.remote_addr}", limit=5, window_seconds=3600)
+                and rate_limit.hit(f"forgot-email:{email}", limit=3, window_seconds=3600)):
+            return render_template("forgot_password.html", error="Too many requests. Please try again later.", sent=None), 429
+        token = make_reset_token(email) if email else None
+        if token:
+            notifier.send_password_reset(email, f"{notifier.base_url()}/client/reset/{token}")
+            logger.info("Password reset link sent")
+        return render_template("forgot_password.html", error=None, sent=_RESET_SENT)
+    return render_template("forgot_password.html", error=None, sent=None)
+
+
+@app.route("/client/reset/<token>", methods=["GET", "POST"])
+def client_reset(token):
+    if not rate_limit.hit(f"reset-ip:{request.remote_addr}", limit=30, window_seconds=3600):
+        return "Too many requests", 429
+    cid = check_reset_token(token)
+    if not cid:
+        return render_template("reset_password.html", token=None,
+                               error="This reset link has expired or was already used. Please ask for a new one."), 400
+    if request.method == "POST":
+        if not csrf_valid():
+            return render_template("reset_password.html", token=token, error="Your session expired. Please try again."), 403
+        password = request.form.get("password", "")
+        if len(password) < 8:
+            return render_template("reset_password.html", token=token, error="Password must be at least 8 characters.")
+        if password != request.form.get("confirm", ""):
+            return render_template("reset_password.html", token=token, error="The two passwords don't match.")
+        set_client_password(cid, password)
+        log_in_client(cid)
+        rotate_csrf_token()
+        logger.info(f"Password reset completed for client {cid[:8]}")
+        return redirect(url_for("client_portal"))
+    return render_template("reset_password.html", token=token, error=None)
 
 
 @app.route("/client/logout")

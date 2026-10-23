@@ -24,8 +24,18 @@ from email.mime.text import MIMEText
 from email.utils import formataddr
 from core.utils import logger
 
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
+# Any SMTP provider works. Gmail is only the fallback for local testing; for
+# real customers use a transactional sender on your own domain (Postmark,
+# Resend, SendGrid, Amazon SES all offer SMTP). See docs/LAUNCH_CHECKLIST.md.
+#   MAGNI_SMTP_FROM      the address mail comes from (alerts@yourdomain.com)
+#   MAGNI_SMTP_PASSWORD  the provider's SMTP password or API token
+#   MAGNI_SMTP_HOST      default smtp.gmail.com
+#   MAGNI_SMTP_PORT      default 587 (STARTTLS)
+#   MAGNI_SMTP_USER      login name if it isn't MAGNI_SMTP_FROM (Postmark: the token; Resend: "resend")
+def _smtp_settings():
+    return (os.getenv("MAGNI_SMTP_HOST", "").strip() or "smtp.gmail.com",
+            int(os.getenv("MAGNI_SMTP_PORT", "").strip() or 587),
+            os.getenv("MAGNI_SMTP_USER", "").strip() or os.getenv("MAGNI_SMTP_FROM", ""))
 
 # Tests flip this to run sends inline.
 RUN_IN_BACKGROUND = True
@@ -78,14 +88,15 @@ def send_email(to_email: str, subject: str, body: str, reply_to: str | None = No
     if reply_to:
         msg["Reply-To"] = reply_to
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+        host, port, user = _smtp_settings()
+        with smtplib.SMTP(host, port, timeout=10) as server:
             server.ehlo()
             server.starttls()
-            server.login(smtp_from, smtp_password)
+            server.login(user, smtp_password)
             server.sendmail(smtp_from, [to_email], msg.as_string())
         return True
     except Exception as e:
-        logger.error(f"Lead email failed: {e}")
+        logger.error(f"Email failed ({subject[:40]}): {e}")
         return False
 
 
@@ -254,3 +265,33 @@ def _send_appointment_emails_es(kind, *, business_name, owner_email, appt, detai
                        reply_to=owner_email or None, from_name=business_name or "Magni")
 
     _dispatch(_send)
+
+
+# ── Account emails (to the business owner, English) ─────────────────────────
+def send_password_reset(to_email: str, reset_url: str) -> None:
+    body = "\n".join([
+        "Someone asked to reset the password for your Magni account.", "",
+        f"Choose a new password here (the link works for one hour): {reset_url}", "",
+        "If this wasn't you, you can ignore this email. Your password won't change.",
+    ])
+    _dispatch(lambda: send_email(to_email, "Reset your Magni password", body, from_name="Magni"))
+
+
+def send_usage_warning(to_email: str, business_name: str, used: int, limit: int, at_limit: bool) -> None:
+    """Tell the owner before their assistant goes quiet, so they can upgrade
+    instead of silently missing leads."""
+    plan_url = f"{base_url()}/portal#billing"
+    if at_limit:
+        subject = "Your assistant has reached this month's conversation limit"
+        lines = [f"{business_name or 'Your business'}'s website assistant has used all {limit:,} conversations "
+                 "included this month.", "",
+                 "Chats already under way can finish, but new visitors will see a short message asking them "
+                 "to contact you directly until your allowance resets.", "",
+                 f"To keep capturing leads now, upgrade your plan: {plan_url}"]
+    else:
+        subject = "Your assistant has used 80% of this month's conversations"
+        lines = [f"{business_name or 'Your business'}'s website assistant has used {used:,} of the {limit:,} "
+                 "conversations included this month.", "",
+                 "When it reaches the limit, new visitors will be asked to contact you directly instead of chatting.", "",
+                 f"If you expect more traffic, you can upgrade here: {plan_url}"]
+    _dispatch(lambda: send_email(to_email, subject, "\n".join(lines), from_name="Magni"))

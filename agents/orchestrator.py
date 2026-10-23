@@ -74,6 +74,11 @@ class Orchestrator:
                 client_email = client.email or ""
                 client_name = client.business_name or ""
                 resolved_client_id = client.id  # authoritative KB scope from the API key
+                usage_alert = getattr(client, "_usage_alert", None)
+                if usage_alert and client_email and client.id != "demo":
+                    from core import notifier
+                    notifier.send_usage_warning(client_email, client_name, client.monthly_used, client._usage_limit,
+                                                at_limit=(usage_alert == "limit"))
             except Exception as e:
                 logger.error(f"Orchestrator billing gate error: {e}")
                 db.rollback()
