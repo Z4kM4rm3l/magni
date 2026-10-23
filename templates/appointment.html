@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Your appointment</title>
+  <style>
+    :root { --bg:#f6f6f7; --card:#fff; --text:#18181b; --dim:#6b6b73; --border:#e4e4e7; --accent:#b45309; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0f0f11; --card:#1a1a1e; --text:#e8e8ea; --dim:#9b9b9b; --border:#2a2a30; --accent:#f59e0b; } }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width:460px; margin:3rem auto; padding:0 16px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:1.5rem; }
+    h1 { font-size:1.25rem; margin:0 0 0.3rem; }
+    .when { font-size:1.1rem; font-weight:600; margin:0.9rem 0 0.3rem; }
+    .dim { color:var(--dim); font-size:0.9rem; line-height:1.5; }
+    .status { display:inline-block; font-size:0.78rem; padding:0.2rem 0.6rem; border-radius:999px; border:1px solid var(--border); color:var(--dim); margin-top:0.4rem; }
+    .status.booked { color:#15803d; border-color:#86efac; }
+    button { margin-top:1.2rem; width:100%; padding:0.75rem; border-radius:10px; border:1px solid #dc2626; background:transparent; color:#dc2626; font-size:0.95rem; cursor:pointer; }
+    button:hover { background:#dc2626; color:#fff; }
+    .ok { color:#15803d; font-weight:600; margin-top:1rem; }
+    .err { color:#dc2626; margin-top:0.8rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      {% if appt %}
+        <h1>{{ business or "Your appointment" }}</h1>
+        <div class="when">{{ appt.when }}</div>
+        {% if appt.property %}<div class="dim">{{ appt.property }}</div>{% endif %}
+        {% if details %}<p class="dim">{{ details }}</p>{% endif %}
+        <span class="status {{ appt.status }}">{{ "Confirmed" if appt.status == "booked" else "Canceled" }}</span>
+        {% if done %}<p class="ok">Your appointment is canceled. {{ business or "The team" }} has been notified.</p>{% endif %}
+        {% if error %}<p class="err">{{ error }}</p>{% endif %}
+        {% if can_cancel %}
+          <form method="post" action="/appt/{{ token }}/cancel" onsubmit="return confirm('Cancel this appointment?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit">Cancel appointment</button>
+          </form>
+          <p class="dim" style="margin-top:0.8rem">To reschedule, cancel here and pick a new time in the chat on our website, or reply to your confirmation email.</p>
+        {% endif %}
+      {% else %}
+        <h1>Appointment</h1>
+        <p class="err">{{ error }}</p>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

@@ -57,6 +57,7 @@
 
     <nav class="jump">
       <a href="#billing">Plan</a>
+      <a href="#appointments" class="rental-only" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>Appointments</a>
       <a href="#leads" class="rental-only" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>Leads</a>
       <a href="#leasing">Leasing assistant</a>
       <a href="#install">Install</a>
@@ -120,6 +121,12 @@
       <div id="leadList" class="lead-list"><div class="empty">Loading...</div></div>
     </div>
 
+    <div class="card rental-only" id="appointments" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>
+      <h2>Appointments</h2>
+      <p>Tours and calls booked through your assistant. Each prospect gets a confirmation with a calendar invite and a reminder the day before.</p>
+      <div id="apptList" class="lead-list"><div class="empty">Loading...</div></div>
+    </div>
+
     <div class="card" id="leasing">
       <h2>Leasing assistant</h2>
       <p>Turn this on and your assistant will pre-qualify renters or guests around the clock, then send you each lead instantly.</p>
@@ -138,7 +145,36 @@
           <label class="fld">Application or booking link (optional)
             <input id="lsApp" type="url" placeholder="https://...">
           </label>
-          <label class="fld">Tour / call scheduling link (optional, e.g. Calendly)
+          <div class="fld" style="margin-top:0.6rem">Online booking</div>
+          <label class="q-item"><input type="checkbox" id="schEnabled" onchange="toggleSchedule()">
+            <span><span>Let prospects book a time right in the chat</span><br><span class="q-text">Your assistant offers real open times from the hours below and books them. Prospects get a confirmation, a calendar invite, and a reminder.</span></span></label>
+          <div id="schFields" style="display:none">
+            <div class="sch-grid">
+              <label class="fld">Time zone<select id="schTz">
+                <option value="America/New_York">Eastern</option><option value="America/Chicago">Central</option>
+                <option value="America/Denver">Mountain</option><option value="America/Phoenix">Arizona</option>
+                <option value="America/Los_Angeles">Pacific</option><option value="America/Anchorage">Alaska</option>
+                <option value="Pacific/Honolulu">Hawaii</option></select></label>
+              <label class="fld">Appointment length<select id="schSlot">
+                <option value="15">15 minutes</option><option value="20">20 minutes</option><option value="30">30 minutes</option>
+                <option value="45">45 minutes</option><option value="60">1 hour</option></select></label>
+              <label class="fld">Minimum notice<select id="schNotice">
+                <option value="0">None</option><option value="1">1 hour</option><option value="2">2 hours</option>
+                <option value="4">4 hours</option><option value="12">12 hours</option><option value="24">1 day</option><option value="48">2 days</option></select></label>
+              <label class="fld">Book up to<select id="schAhead">
+                <option value="7">1 week ahead</option><option value="14">2 weeks ahead</option>
+                <option value="30">30 days ahead</option><option value="60">60 days ahead</option></select></label>
+            </div>
+            <div class="fld">Weekly hours</div>
+            <div id="schHours" class="q-list"></div>
+            <label class="fld">Days off (YYYY-MM-DD, comma-separated)
+              <input id="schBlocked" type="text" placeholder="2026-11-26, 2026-12-25">
+            </label>
+            <label class="fld">Where to meet / how it works (included in confirmations)
+              <textarea id="schDetails" rows="2" maxlength="300" placeholder="e.g. Meet us at the leasing office, 123 Palm St. Bring a photo ID."></textarea>
+            </label>
+          </div>
+          <label class="fld" id="lsBookWrap">Tour / call scheduling link (optional, e.g. Calendly)
             <input id="lsBook" type="url" placeholder="https://...">
           </label>
           <label class="fld">Send lead alerts to this email
@@ -275,6 +311,14 @@
       .lead-body div { padding:0.15rem 0; } .lead-body .k { color:var(--dim); }
       .lead select { width:auto; padding:0.35rem 0.5rem; border-radius:8px; border:1px solid var(--border); background:#121216; color:var(--text); font-size:0.8rem; }
       a.btn-ghost { text-decoration:none; font-size:0.85rem; }
+      .sch-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0 0.8rem; }
+      .day-row { display:flex; align-items:center; gap:0.6rem; padding:0.35rem 0; border-top:1px solid var(--border); font-size:0.85rem; flex-wrap:wrap; }
+      .day-row .day-name { width:6.5rem; }
+      .day-row input[type=time] { width:auto; margin:0; padding:0.35rem 0.5rem; }
+      .day-row input[type=checkbox] { width:auto; margin:0; }
+      .appt { display:flex; justify-content:space-between; align-items:center; gap:0.6rem; border-top:1px solid var(--border); padding:0.7rem 0; flex-wrap:wrap; }
+      .appt.past, .appt.canceled { opacity:0.55; }
+      .appt-when { font-weight:600; font-size:0.92rem; }
     </style>
   </div>
   <script>
@@ -418,6 +462,7 @@
         document.getElementById('lsEmail').value = c.notify_email || '';
         document.getElementById('lsEmail').placeholder = leasing.account_email || '';
         document.getElementById('lsPhone').value = c.notify_phone || '';
+        fillSchedule(c.schedule || {});
         renderLeasing(true);
       } catch (e) { document.getElementById('lsStatus').textContent = 'Could not load leasing settings.'; }
     }
@@ -442,6 +487,7 @@
         return `<label class="q-item"><input type="checkbox" data-q="${q.key}" ${enabled.has(q.key) ? 'checked' : ''} ${locked ? 'disabled' : ''}>
           <span><span>${esc(q.label)}${locked ? ' (always asked)' : ''}${q.needs_criteria ? ' (needs posted criteria)' : ''}</span><br><span class="q-text">"${esc(q.text.replace('{criteria}', '[your posted criteria]'))}"</span></span></label>`;
       }).join('');
+      toggleSchedule();
     }
 
     async function saveLeasing(btn) {
@@ -457,6 +503,7 @@
           booking_url: document.getElementById('lsBook').value.trim(),
           notify_email: document.getElementById('lsEmail').value.trim(),
           notify_phone: document.getElementById('lsPhone').value.trim(),
+          schedule: readSchedule(),
         };
       }
       btn.disabled = true; status.textContent = 'Saving...';
@@ -466,12 +513,95 @@
         if (r.ok) {
           leasing.vertical = d.vertical; leasing.config = d.config || leasing.config;
           status.textContent = 'Saved.';
-          if (d.config) document.getElementById('lsPhone').value = d.config.notify_phone || '';
-          loadLeads();
+          if (d.config) { document.getElementById('lsPhone').value = d.config.notify_phone || ''; fillSchedule(d.config.schedule || {}); }
+          loadLeads(); loadAppointments();
         } else { status.textContent = d.error || 'Could not save.'; }
       } catch (e) { status.textContent = 'Network error.'; }
       btn.disabled = false;
       setTimeout(() => { status.textContent = ''; }, 4000);
+    }
+
+    // ── Online booking ─────────────────────────────────────────────────────
+    const DAYS = [['mon','Monday'],['tue','Tuesday'],['wed','Wednesday'],['thu','Thursday'],['fri','Friday'],['sat','Saturday'],['sun','Sunday']];
+    function fillSchedule(s) {
+      document.getElementById('schEnabled').checked = !!s.enabled;
+      document.getElementById('schTz').value = s.timezone || 'America/New_York';
+      document.getElementById('schSlot').value = String(s.slot_minutes || 30);
+      document.getElementById('schNotice').value = String(s.min_notice_hours != null ? s.min_notice_hours : 2);
+      document.getElementById('schAhead').value = String(s.max_days_ahead || 14);
+      document.getElementById('schBlocked').value = (s.blocked_dates || []).join(', ');
+      document.getElementById('schDetails').value = s.details || '';
+      const hours = s.hours || {};
+      document.getElementById('schHours').innerHTML = DAYS.map(([k, label]) => {
+        const w = hours[k];
+        return `<div class="day-row"><label class="day-name"><input type="checkbox" data-day="${k}" ${w ? 'checked' : ''} onchange="dayToggle('${k}')"> ${label}</label>
+          <input type="time" id="from-${k}" value="${w ? w[0] : '09:00'}" ${w ? '' : 'disabled'}> to
+          <input type="time" id="to-${k}" value="${w ? w[1] : '17:00'}" ${w ? '' : 'disabled'}></div>`;
+      }).join('');
+      toggleSchedule();
+    }
+    function dayToggle(k) {
+      const on = document.querySelector(`#schHours input[data-day="${k}"]`).checked;
+      document.getElementById('from-' + k).disabled = !on;
+      document.getElementById('to-' + k).disabled = !on;
+    }
+    function toggleSchedule() {
+      const on = document.getElementById('schEnabled').checked;
+      document.getElementById('schFields').style.display = on ? 'block' : 'none';
+      document.getElementById('lsBookWrap').style.display = on ? 'none' : 'block';
+      // Online booking replaces the free-text "preferred time" question.
+      const tq = document.querySelector('#lsQuestions input[data-q="tour_time"]');
+      if (tq) tq.closest('.q-item').style.display = on ? 'none' : '';
+    }
+    function readSchedule() {
+      const hours = {};
+      DAYS.forEach(([k]) => {
+        const on = document.querySelector(`#schHours input[data-day="${k}"]`).checked;
+        hours[k] = on ? [document.getElementById('from-' + k).value, document.getElementById('to-' + k).value] : null;
+      });
+      return {
+        enabled: document.getElementById('schEnabled').checked,
+        timezone: document.getElementById('schTz').value,
+        slot_minutes: parseInt(document.getElementById('schSlot').value, 10),
+        min_notice_hours: parseInt(document.getElementById('schNotice').value, 10),
+        max_days_ahead: parseInt(document.getElementById('schAhead').value, 10),
+        hours,
+        blocked_dates: document.getElementById('schBlocked').value,
+        details: document.getElementById('schDetails').value,
+      };
+    }
+
+    async function loadAppointments() {
+      const list = document.getElementById('apptList');
+      try {
+        const r = await fetch('/api/portal/appointments');
+        if (!r.ok) throw new Error('bad status');
+        const d = await r.json();
+        const appts = d.appointments || [];
+        if (!appts.length) {
+          list.innerHTML = '<div class="empty">' + (d.enabled ? 'No appointments yet. They\'ll show up here as prospects book.' : 'Turn on online booking in the Leasing assistant settings below to let prospects book in the chat.') + '</div>';
+          return;
+        }
+        const now = Date.now();
+        list.innerHTML = appts.map(a => {
+          const past = new Date(a.end_at).getTime() < now;
+          const cls = a.status === 'canceled' ? 'canceled' : (past ? 'past' : '');
+          const tag = a.status === 'canceled' ? `<span class="badge">Canceled${a.canceled_by ? ' by ' + (a.canceled_by === 'owner' ? 'you' : 'prospect') : ''}</span>` : (past ? '<span class="badge">Past</span>' : '<span class="badge hot">Booked</span>');
+          const contact = [a.phone, a.email].filter(Boolean).map(esc).join(' · ');
+          const btn = a.status === 'booked' && !past ? `<button class="btn-ghost danger" onclick="cancelAppt('${a.id}', this)">Cancel</button>` : '';
+          return `<div class="appt ${cls}"><div><div class="appt-when">${esc(a.when)}${tag}</div>
+            <div class="lead-sub">${esc(a.name || 'Prospect')}${contact ? ' · ' + contact : ''}${a.property ? ' · ' + esc(a.property) : ''}</div></div>${btn}</div>`;
+        }).join('');
+      } catch (e) { list.innerHTML = '<div class="empty">Could not load appointments.</div>'; }
+    }
+    async function cancelAppt(id, btn) {
+      if (!confirm('Cancel this appointment? The prospect will get an email.')) return;
+      btn.disabled = true;
+      try {
+        const r = await fetch('/api/portal/appointments/' + id + '/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        if (!r.ok) { const e = await r.json().catch(() => ({})); alert(e.error || 'Could not cancel.'); btn.disabled = false; return; }
+        loadAppointments(); loadLeads();
+      } catch (e) { alert('Network error.'); btn.disabled = false; }
     }
 
     // ── Leads ──────────────────────────────────────────────────────────────
@@ -549,8 +679,8 @@
 
     loadAnalytics();
     loadArticles();
-    loadLeasing().then(loadLeads);
-    setInterval(() => { if (RENTAL.includes(document.getElementById('lsVertical').value)) loadLeads(); }, 30000);
+    loadLeasing().then(() => { loadLeads(); loadAppointments(); });
+    setInterval(() => { if (RENTAL.includes(document.getElementById('lsVertical').value)) { loadLeads(); loadAppointments(); } }, 30000);
   </script>
 </body>
 </html>

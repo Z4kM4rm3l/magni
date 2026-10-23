@@ -119,6 +119,8 @@ class Orchestrator:
                 forced_escalation = "Prospect asked for a person or raised a concern during the rental intake."
             elif lead_result:
                 return finish(lead_result)
+            elif (post := _lead_flow.post_intake(ctx, session_id, message)):
+                return finish(post)
             elif detect_accommodation(message):
                 # Never let the general assistant quote pet rules at an assistance-animal request.
                 lead_result = _lead_flow.start(ctx, session_id, message, history, history_summary)

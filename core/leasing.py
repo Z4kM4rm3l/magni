@@ -128,10 +128,10 @@ _PHONE_RE = re.compile(r"(?:\+?1[\s.\-]?)?\(?\b(\d{3})\)?[\s.\-]?(\d{3})[\s.\-]?
 # Phrases that describe WHO a home or area is for, or that steer by a
 # protected class. Matched case-insensitively on word boundaries.
 _STEERING_PATTERNS = [
-    r"family[\s-]friendly", r"great for (?:families|kids|children|couples|singles|young professionals|retirees|seniors)",
-    r"perfect for (?:families|kids|children|couples|singles|young professionals|retirees|seniors)",
-    r"ideal for (?:families|kids|children|couples|singles|young professionals|retirees|seniors)",
-    r"best (?:suited )?for (?:families|kids|children|couples|singles|young professionals|retirees|seniors)",
+    r"family[\s-]friendly", r"great for (?:(?:young |growing )?families|kids|children|couples|singles|young professionals|retirees|seniors)",
+    r"perfect for (?:(?:young |growing )?families|kids|children|couples|singles|young professionals|retirees|seniors)",
+    r"ideal for (?:(?:young |growing )?families|kids|children|couples|singles|young professionals|retirees|seniors)",
+    r"best (?:suited )?for (?:(?:young |growing )?families|kids|children|couples|singles|young professionals|retirees|seniors)",
     r"no (?:kids|children)(?!['\u2019])", r"adults? only", r"child[\s-]free",
     r"not (?:suitable|ideal|good) for (?:kids|children|families|seniors|the elderly)",
     r"(?:safe|good|bad|rough|sketchy|dangerous|exclusive|desirable) (?:neighborhood|part of town)",
@@ -253,7 +253,13 @@ def default_lead_config(vertical: str) -> dict:
         "booking_url": "",
         "notify_email": "",
         "notify_phone": "",
+        "schedule": _default_schedule(),
     }
+
+
+def _default_schedule() -> dict:
+    from core.scheduling import normalize_schedule
+    return normalize_schedule(None)
 
 
 class LeadConfigError(ValueError):
@@ -333,6 +339,12 @@ def normalize_lead_config(raw: dict | None, vertical: str, strict: bool = False)
         fail("Alert phone must be a 10-digit US number")
         phone = ""
     out["notify_phone"] = phone or ""
+
+    from core.scheduling import normalize_schedule, ScheduleError
+    try:
+        out["schedule"] = normalize_schedule(raw.get("schedule"), strict=strict)
+    except ScheduleError as e:
+        raise LeadConfigError(str(e))
     return out
 
 
@@ -347,6 +359,9 @@ def active_questions(config: dict) -> list[str]:
         if spec.get("needs_criteria") and not config.get("rental_criteria"):
             continue
         qs.append(k)
+    # Online booking replaces the free-text tour question, so it's always the last step.
+    if (config.get("schedule") or {}).get("enabled") and "tour_time" not in qs:
+        qs.append("tour_time")
     return qs
 
 
@@ -399,7 +414,7 @@ def closing_message(answers: dict, config: dict, vertical: str) -> str:
     if config.get("application_url"):
         label = "book or request a stay" if vertical == "seasonal" else "start an application"
         parts.append(f"If you'd like to {label} now: {config['application_url']}")
-    if config.get("booking_url"):
+    if config.get("booking_url") and not (config.get("schedule") or {}).get("enabled"):
         parts.append(f"To pick a time that works for you: {config['booking_url']}")
     parts.append("Is there anything else I can help with in the meantime?")
     return "\n\n".join(parts)

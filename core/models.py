@@ -1,6 +1,6 @@
 # core/models.py
 from sqlalchemy import (
-    Column, String, Integer, Boolean, DateTime, JSON, Text, ForeignKey, Index, Float
+    Column, String, Integer, Boolean, DateTime, JSON, Text, ForeignKey, Index, Float, text
 )
 from sqlalchemy.orm import relationship
 from core.db import Base
@@ -61,6 +61,12 @@ class Client(Base):
     )
     leads = relationship(
         "Lead",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    appointments = relationship(
+        "Appointment",
         back_populates="client",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -223,3 +229,40 @@ class StripeEvent(Base):
     id          = Column(String, primary_key=True)  # Stripe event id (evt_...)
     type        = Column(String, nullable=True)
     received_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class Appointment(Base):
+    """A tour / call booked through the built-in scheduler."""
+    __tablename__ = "appointments"
+
+    id         = Column(String, primary_key=True, index=True)
+    client_id  = Column(String, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
+    lead_id    = Column(String, ForeignKey("leads.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    start_at   = Column(DateTime(timezone=True), nullable=False)
+    end_at     = Column(DateTime(timezone=True), nullable=False)
+    status     = Column(String, nullable=False, default="booked")  # booked|canceled
+
+    name       = Column(String, nullable=True)
+    email      = Column(String, nullable=True)
+    phone      = Column(String, nullable=True)
+    property   = Column(String, nullable=True)
+
+    cancel_token     = Column(String, nullable=False, unique=True, index=True)
+    created_at       = Column(DateTime(timezone=True), nullable=True)
+    canceled_at      = Column(DateTime(timezone=True), nullable=True)
+    canceled_by      = Column(String, nullable=True)  # prospect|owner
+    reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
+
+    client = relationship("Client", back_populates="appointments")
+
+    __table_args__ = (
+        Index("ix_appt_client_start", "client_id", "start_at"),
+        # One booked appointment per client per slot, enforced by the database.
+        Index("uq_appt_client_slot_booked", "client_id", "start_at", unique=True,
+              postgresql_where=text("status = 'booked'"), sqlite_where=text("status = 'booked'")),
+        # And one booked appointment per prospect (double-taps, retries).
+        Index("uq_appt_lead_booked", "lead_id", unique=True,
+              postgresql_where=text("status = 'booked' AND lead_id IS NOT NULL"),
+              sqlite_where=text("status = 'booked' AND lead_id IS NOT NULL")),
+    )

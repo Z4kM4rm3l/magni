@@ -1,0 +1,49 @@
+# Magni: notes for Claude Code
+
+Multi-tenant AI chat assistant for small businesses, focused on property managers and seasonal rental operators. Python/Flask, SQLAlchemy + Alembic on PostgreSQL, Claude Haiku 5.5 via the Anthropic SDK, Stripe billing, deployed on Railway.
+
+## Owner preferences
+- Zak works at the architecture level and relies on you for code. Explain what you changed and why in plain language.
+- Don't use em dashes in anything written for him (messages, docs, UI copy).
+- Ship in small, tested steps: one branch per feature, tests passing before every commit, squash-merge PRs into `main`.
+
+## Run things
+```bash
+pip install -r requirements.txt
+python tests/test_leasing_mvp.py        # billing, leasing intake, Fair Housing guardrails, alerts
+python tests/test_scheduler.py          # built-in scheduler (booking, cancel, reminders, widget CORS)
+python tests/test_portal_isolation.py   # tenant isolation + CSRF
+python tests/test_conversation_ownership.py
+python tests/test_orchestrator.py
+```
+Each suite prints `ALL PASSED` (orchestrator prints `PASS`). They run on in-memory SQLite with the LLM, email, SMS, and Stripe stubbed, so no keys are needed. To run a suite against real Postgres, point `MAGNI_TEST_DATABASE_URL` at an empty database that has had `alembic upgrade head`.
+
+`tests/test_triage_agent.py`, `test_resolver_agent.py`, `test_escalation_agent.py` call the real Claude API and need `ANTHROPIC_API_KEY`.
+
+## Map
+- `app.py`: Flask app, admin + client portal routes, `/api/portal/*` JSON APIs, public `/appt/<token>` cancel page.
+- `agents/`: `orchestrator.py` (entry point for every chat turn), `triage_agent`, `resolver_agent`, `escalation_agent`, `lead_agent` (extracts intake answers).
+- `core/llm.py`: the ONLY place that calls the model. `generate()` / `chat()`; model from `CLAUDE_MODEL` (default `claude-haiku-5-5`). Tests stub these two functions.
+- `core/leasing.py`: question catalog, presets, config validation, Fair Housing guardrails (`check_output`, `detect_accommodation`).
+- `core/lead_flow.py`: deterministic intake engine (what to ask, in what order), booking step, alerts, partial-lead sweep, reminders.
+- `core/scheduling.py`: availability, reply parsing ("2", "Saturday at 11am"), booking, cancel, .ics invites.
+- `core/billing_policies.py` + `routes/billing.py`: 14-day trial, Stripe Checkout / Customer Portal, webhooks (idempotent, always re-read the subscription live from Stripe).
+- `core/client_guard.py`: per-request usage + billing gate before any model call.
+- `routes/widget.py`: embeddable widget (`/widget/magni.js`, `/widget/chat`), per-client allowed domains, rate limits.
+- `migrations/versions/`: Alembic is the schema authority; `init_db()` runs `alembic upgrade head` on startup. Add a new numbered migration for every model change.
+- `docs/LAUNCH_CHECKLIST.md`: Railway, Stripe, and smoke-test steps. `docs/BILLING_PROTECTION.md`: cost safety layers.
+
+## Rules that must not regress
+- **Tenant isolation:** portal routes take `client_id` only from the session (`current_client_id()`), never from the request. Every query is scoped by `client_id`.
+- **CSRF:** mutating portal/admin requests go through `client_login_required` / `api_login_required`, which enforce the token.
+- **Fair Housing:** every prospect gets the same questions in the same order with fixed wording; the assistant never scores, ranks, or rejects anyone; assistance animals are never pets; rental replies pass `check_output()`. Don't add owner-written questions.
+- **Scheduler safety:** only an exact pick ("2") or an explicit day + clock time books outright; anything looser is confirmed first. One booked appointment per slot and per prospect, enforced by partial unique indexes.
+- **Billing:** a failed payment never sets `is_active=False`; billing state lives in `subscription_status`. Visitor-facing errors stay neutral (`VISITOR_UNAVAILABLE`).
+- **Never hold a DB transaction open across an LLM call** (see `_load_detached` / `_save` in `lead_flow.py`).
+- **Links** in emails and chat come from `PUBLIC_BASE_URL` only; the app refuses to start in production without it.
+
+## Required env vars (Railway)
+`SECRET_KEY`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL`, `ALLOWED_ORIGINS`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (hash), `MAGNI_SMTP_FROM`, `MAGNI_SMTP_PASSWORD`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PROFESSIONAL`. Optional: `CLAUDE_MODEL`, `CLAUDE_FAST_MODEL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`.
+
+## Status (Oct 2026)
+Built: trial + Stripe billing, leasing pre-qualification with instant email/SMS alerts, Leads tab, built-in scheduler with confirmations/reminders, Claude Haiku 5.5. Not yet done: Railway deploy + live smoke test, Twilio A2P 10DLC registration for SMS, a first paying customer.

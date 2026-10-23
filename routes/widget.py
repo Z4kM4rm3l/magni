@@ -32,15 +32,35 @@ def _get_client_by_key(api_key: str) -> Client | None:
     return get_client_by_api_key(api_key, active_only=True)
 
 
+def _origin_allowed(client: Client) -> bool:
+    origin = request.headers.get("Origin", "")
+    if not origin:
+        return True  # server-to-server or same-origin; the API key still gates it
+    domains = client.allowed_domains or []
+    # Strip protocol from origin for comparison: "https://foo.com" -> "foo.com"
+    origin_host = origin.replace("https://", "").replace("http://", "").rstrip("/")
+    return origin_host in domains or "*" in domains
+
+
+def _preflight():
+    """Browsers send CORS preflights WITHOUT custom headers, so the API key
+    isn't available here. Allow the preflight; the real request is gated by the
+    key and the client's allowed domains."""
+    resp = make_response("", 204)
+    origin = request.headers.get("Origin", "")
+    if origin:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Vary"] = "Origin"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Magni-API-Key"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    resp.headers["Access-Control-Max-Age"] = "600"
+    return resp
+
+
 def _cors_headers(client: Client) -> dict:
     """Build CORS headers scoped to the client's allowed_domains list."""
     origin = request.headers.get("Origin", "")
-    domains = client.allowed_domains or []
-
-    # Strip protocol from origin for comparison: "https://foo.com" -> "foo.com"
-    origin_host = origin.replace("https://", "").replace("http://", "").rstrip("/")
-
-    if origin_host in domains or "*" in domains:
+    if _origin_allowed(client):
         allowed_origin = origin or "*"
     else:
         allowed_origin = "null"  # blocked — browser will reject
@@ -60,6 +80,8 @@ def _add_cors(response, client: Client):
 
 @widget_bp.route("/widget/config", methods=["GET", "OPTIONS"])
 def widget_config():
+    if request.method == "OPTIONS":
+        return _preflight()
     api_key = request.args.get("key", "").strip()
     if not api_key:
         return jsonify({"error": "Missing key"}), 400
@@ -67,10 +89,6 @@ def widget_config():
     client = _get_client_by_key(api_key)
     if not client:
         return jsonify({"error": "Invalid or inactive API key"}), 403
-
-    if request.method == "OPTIONS":
-        resp = make_response("", 204)
-        return _add_cors(resp, client)
 
     resp = make_response(jsonify({
         "bot_name":       client.bot_name or "Magni",
@@ -82,6 +100,8 @@ def widget_config():
 
 @widget_bp.route("/widget/chat", methods=["POST", "OPTIONS"])
 def widget_chat():
+    if request.method == "OPTIONS":
+        return _preflight()
     api_key = request.headers.get("X-Magni-API-Key", "").strip()
     if not api_key:
         return jsonify({"error": "Missing X-Magni-API-Key header"}), 401
@@ -90,9 +110,12 @@ def widget_chat():
     if not client:
         return jsonify({"error": "Invalid or inactive API key"}), 403
 
-    if request.method == "OPTIONS":
-        resp = make_response("", 204)
-        return _add_cors(resp, client)
+    # Refuse other websites' browsers before any model call. (A script can fake
+    # the Origin header, so the per-IP / per-key rate limits below are the real
+    # cost control; this stops copy-pasted widgets on someone else's site.)
+    if not _origin_allowed(client):
+        logger.warning(f"Widget: blocked origin {request.headers.get('Origin')} for client {client.id[:8]}")
+        return _add_cors(make_response(jsonify({"error": "This website isn't allowed to use this assistant."}), 403), client)
 
     if not (rate_limit.hit(f"w-ip:{client.id}:{request.remote_addr}", WIDGET_PER_IP_PER_MIN, 60)
             and rate_limit.hit(f"w-key:{client.id}", WIDGET_PER_KEY_PER_MIN, 60)):

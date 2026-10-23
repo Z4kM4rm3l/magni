@@ -50,7 +50,7 @@ If you restore an old database that predates Alembic, run `alembic stamp 0001` o
 
 ## 5. Partial-lead sweep (scheduled job)
 
-Prospects who give a phone or email and then stop replying get sent to the owner after 20 minutes. Live chat traffic triggers this about once a minute, but add a cron service so it also runs overnight. Railway no longer lets new services use `railway.json` files, so set this up in the dashboard:
+Prospects who give a phone or email and then stop replying get sent to the owner after 20 minutes, and booked prospects get a reminder email the day before their appointment. Live chat traffic triggers both about once a minute, but add a cron service so they also run overnight. Railway no longer lets new services use `railway.json` files, so set this up in the dashboard:
 
 - **+ New → GitHub repo → magni** (a second service, e.g. `lead-sweep`)
 - **Settings → Start Command:** `python scripts/sweep_leads.py`
@@ -68,11 +68,13 @@ The web service's **Start Command** should be `python app.py`.
 1. Sign up at `/signup`. The portal should say **Free trial: 14 days left**.
 2. **Leasing assistant** card: set Business type to *Long-term rentals*, add posted criteria, an application link, and your own email/phone for alerts. Save.
 3. **Knowledge base**: use a suggested article (for example *Available units and pricing*) and add one real unit with a price.
-4. **Install**: paste the embed snippet into a test page, and add that page's domain under Appearance → Allowed website domains.
-5. Chat as a prospect: "Is the 2 bedroom available in January?" Answer every question. You should get the alert email (and text, if Twilio is set up), and the lead should show in **Leads**.
-6. In a new chat, say "I have an emotional support dog." The assistant should not quote pet rules, and the lead should be flagged as an accommodation request.
-7. **Choose Starter** → pay with card `4242 4242 4242 4242`. Back in the portal it should still show the trial (first charge happens when the trial ends). In Stripe, the subscription should show as *trialing*.
-8. **Manage billing** should open the Stripe customer portal. Cancel there, and within a few seconds the portal should say *Your subscription has ended*, and the widget should reply with the neutral "unavailable" message.
+4. **Install**: paste the embed snippet into a test page, and add that page's domain under Appearance → Allowed website domains. The widget refuses to answer on any site that isn't listed (add both `example.com` and `www.example.com` if the site uses both).
+5. **Online booking**: in the Leasing assistant card, tick *Let prospects book a time right in the chat*, set your hours and where to meet, and save.
+6. Chat as a prospect: "Is the 2 bedroom available? Could I tour Saturday?" Answer the questions, then pick a time from the list (reply with a number, or say "Saturday at 11"). You should get the lead alert with a calendar invite, the prospect email should get a confirmation with an invite and a cancel link, and the booking should show under **Appointments**.
+7. Open the cancel link from the confirmation email and cancel. You should get a cancellation email, and the time should be open again.
+8. In a new chat, say "I have an emotional support dog." The assistant should not quote pet rules, and the lead should be flagged as an accommodation request.
+9. **Choose Starter** → pay with card `4242 4242 4242 4242`. Back in the portal it should still show the trial (first charge happens when the trial ends). In Stripe, the subscription should show as *trialing*.
+10. **Manage billing** should open the Stripe customer portal. Cancel there, and within a few seconds the portal should say *Your subscription has ended*, and the widget should reply with the neutral "unavailable" message.
 
 ## 7. Before your first real customer
 
