@@ -18,6 +18,7 @@ python tests/test_rental_focus.py       # rental-only prompts, leasing analytics
 python tests/test_market_features.py    # residents, after-hours tags, Spanish intake + booking, multiple properties
 python tests/test_account_emails.py     # SMTP provider, forgot password, 80% / limit usage warnings
 python tests/test_retention.py          # 12 / 24 month retention, database-side analytics counts (also runs on Postgres)
+python tests/test_insights.py           # owner insights: data-only rules, minimum samples, masking (also runs on Postgres)
 python tests/test_conversation_ownership.py
 python tests/test_orchestrator.py
 ```
@@ -34,6 +35,7 @@ Each suite prints `ALL PASSED` (orchestrator prints `PASS`). They run on in-memo
 - `core/lead_flow.py`: deterministic intake engine (what to ask, in what order), booking step, alerts, partial-lead sweep, reminders.
 - `core/scheduling.py`: availability, reply parsing ("2", "Saturday at 11am", "el sábado a las 11"), booking, cancel, .ics invites, `is_after_hours`.
 - `core/i18n.py`: English and Spanish for every fixed reply, plus `detect_lang`. A lead's language is set once (`lead.flags["lang"]`) and kept. Owner-facing text stays English.
+- `core/insights.py`: the portal's Insights card. Counts and fixed rules over the tenant's own chats, leads and tours, never a model call. Every suggestion has a minimum sample and a "basis" with its numbers; examples are real messages with contact details masked.
 - `core/billing_policies.py` + `routes/billing.py`: 14-day trial, Stripe Checkout / Customer Portal, webhooks (idempotent, always re-read the subscription live from Stripe).
 - `core/client_guard.py`: per-request usage + billing gate before any model call.
 - `routes/widget.py`: embeddable widget (`/widget/magni.js`, `/widget/chat`), per-client allowed domains, rate limits.
@@ -48,6 +50,7 @@ Each suite prints `ALL PASSED` (orchestrator prints `PASS`). They run on in-memo
 - **Billing:** a failed payment never sets `is_active=False`; billing state lives in `subscription_status`. Visitor-facing errors stay neutral (`VISITOR_UNAVAILABLE`).
 - **Never hold a DB transaction open across an LLM call** (see `_load_detached` / `_save` in `lead_flow.py`).
 - **Links** in emails and chat come from `PUBLIC_BASE_URL` only; the app refuses to start in production without it.
+- **Insights never invent anything:** no LLM in `core/insights.py`; a new suggestion needs a minimum sample, a `basis` with its numbers, and no guessed cause. Topics describe the property or request, never the people (no schools, "safe areas", families).
 - **Retention:** chats are deleted after 12 months, leads and appointments after 24 (`core/retention.py`, daily `scripts/apply_retention.py`). Analytics count in the database (`func.count`), never by loading a tenant's rows into Python.
 
 ## Required env vars (Railway)
