@@ -153,6 +153,7 @@ magni/
 ├── core/
 │   ├── llm.py                the only place that calls the model (Claude via the Anthropic SDK)
 │   ├── escalations.py        chats that need a person: record, contact capture, alerts, retries
+│   ├── llm_health.py         emails / texts the operator when model calls start failing
 │   ├── leasing.py            business types, question catalog, config validation, Fair Housing guardrails
 │   ├── lead_flow.py          deterministic intake, booking step, alerts, partial-lead sweep, reminders
 │   ├── scheduling.py         availability, reply parsing (EN/ES), booking, cancel, .ics, after-hours
@@ -172,7 +173,7 @@ magni/
 ├── scripts/                  cron jobs and one-off tools (sweep, usage reset, retention,
 │                             demo account, billing reconcile, admin password hash)
 ├── templates/                landing, portal, admin, auth and appointment pages
-├── tests/                    12 offline suites + 3 live-model checks
+├── tests/                    13 offline suites + 3 live-model checks
 └── docs/
     ├── LAUNCH_CHECKLIST.md   Railway, Stripe, email, cron and smoke-test steps
     └── BILLING_PROTECTION.md AI cost safety layers
@@ -203,6 +204,7 @@ python tests/test_market_features.py      # residents, after hours, Spanish, mul
 python tests/test_account_emails.py       # SMTP provider, forgot password, usage warnings
 python tests/test_retention.py            # retention + database-side counts
 python tests/test_insights.py             # data-only insights, minimum samples, masking
+python tests/test_llm_health.py           # operator alert when model calls fail, recovery notice
 python tests/test_conversation_ownership.py
 python tests/test_orchestrator.py
 ```

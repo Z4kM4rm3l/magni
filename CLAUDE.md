@@ -20,6 +20,7 @@ python tests/test_market_features.py    # residents, after-hours tags, Spanish i
 python tests/test_account_emails.py     # SMTP provider, forgot password, 80% / limit usage warnings
 python tests/test_retention.py          # 12 / 24 month retention, database-side analytics counts (also runs on Postgres)
 python tests/test_insights.py           # owner insights: data-only rules, minimum samples, masking (also runs on Postgres)
+python tests/test_llm_health.py         # operator alert when model calls fail, cooldown, recovery notice
 python tests/test_conversation_ownership.py
 python tests/test_orchestrator.py
 ```
@@ -33,6 +34,7 @@ Each suite prints `ALL PASSED` (orchestrator prints `PASS`). They run on in-memo
 - `core/escalations.py`: chats that need a person, for every business type. The durable record, the fixed high-risk patterns (`high_risk`), deterministic contact capture, owner alerts and their retries.
 - `scripts/create_demo_client.py` / `reset_demo_daily.py`: the landing-page demo account (a sample coffee shop, a `general` account). It never emails or texts anyone.
 - `core/llm.py`: the ONLY place that calls the model. `generate()` / `chat()`; model from `CLAUDE_MODEL` (default `claude-haiku-5-5`). Tests stub these two functions.
+- `core/llm_health.py`: operator alert when model calls fail (3 in 5 minutes), at most every 30 minutes, plus one "working again" notice. Hooked in `llm._call`.
 - `core/leasing.py`: business types (`VERTICALS`, `DEFAULT_VERTICAL`, `is_rental_vertical`, default bot name and greeting), question catalog, presets, config validation, Fair Housing guardrails (`check_output`, `detect_accommodation`).
 - `core/lead_flow.py`: deterministic intake engine (what to ask, in what order), booking step, alerts, partial-lead sweep, reminders.
 - `core/scheduling.py`: availability, reply parsing ("2", "Saturday at 11am", "el sábado a las 11"), booking, cancel, .ics invites, `is_after_hours`.
@@ -58,7 +60,7 @@ Each suite prints `ALL PASSED` (orchestrator prints `PASS`). They run on in-memo
 - **Retention:** chats are deleted after 12 months, leads and appointments after 24 (`core/retention.py`, daily `scripts/apply_retention.py`). Analytics count in the database (`func.count`), never by loading a tenant's rows into Python.
 
 ## Required env vars (Railway)
-`SECRET_KEY`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL`, `ALLOWED_ORIGINS`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (hash), `MAGNI_SMTP_FROM`, `MAGNI_SMTP_PASSWORD`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PROFESSIONAL`. Email provider: `MAGNI_SMTP_HOST`, `MAGNI_SMTP_PORT`, `MAGNI_SMTP_USER` (Gmail if unset; use a transactional provider in production). Optional: `CLAUDE_MODEL`, `CLAUDE_FAST_MODEL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`.
+`SECRET_KEY`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL`, `ALLOWED_ORIGINS`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (hash), `MAGNI_SMTP_FROM`, `MAGNI_SMTP_PASSWORD`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PROFESSIONAL`. Email provider: `MAGNI_SMTP_HOST`, `MAGNI_SMTP_PORT`, `MAGNI_SMTP_USER` (Gmail if unset; use a transactional provider in production). Operator alerts: `OPERATOR_ALERT_EMAIL`, optional `OPERATOR_ALERT_PHONE`. Optional: `CLAUDE_MODEL`, `CLAUDE_FAST_MODEL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`.
 
 ## Status (Nov 2026)
 Built: general customer service for any business (default), the "needs a person" handoff with contact capture, trial + Stripe billing, leasing pre-qualification with instant email/SMS alerts, Leads tab, built-in scheduler with confirmations/reminders, Claude Haiku 5.5. Not yet done: prompt-injection test suite, widget session persistence and mobile polish, Railway deploy + live smoke test, Twilio A2P 10DLC registration for SMS, a first paying customer.

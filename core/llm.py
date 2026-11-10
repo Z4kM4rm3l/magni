@@ -90,7 +90,16 @@ def _call(model, system, messages, thinking):
     blocks = _system_blocks(system)
     if blocks:
         kwargs["system"] = blocks
-    return _text(_get_client().messages.create(**kwargs))
+    # Every model call passes through here, so this is where the operator
+    # alert (core/llm_health.py) learns about failures and recoveries.
+    from core import llm_health
+    try:
+        response = _get_client().messages.create(**kwargs)
+    except Exception as e:
+        llm_health.record_failure(e)
+        raise
+    llm_health.record_success()
+    return _text(response)
 
 
 def generate(prompt: str, system=None, *, fast: bool = True,

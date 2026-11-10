@@ -34,6 +34,8 @@ Everything below is one-time setup. Do it in Stripe **test mode** first, run the
 | `MAGNI_SMTP_FROM` | the address mail comes from, on your own domain (e.g. `alerts@yourdomain.com`) |
 | `MAGNI_SMTP_PASSWORD` | the email provider's SMTP password / API token (see "Email sending" below) |
 | `MAGNI_SMTP_HOST` / `MAGNI_SMTP_PORT` / `MAGNI_SMTP_USER` | the provider's SMTP settings. Leave unset only for a Gmail test account |
+| `OPERATOR_ALERT_EMAIL` | your own email. Magni emails it when AI model calls start failing (provider outage, bad key, out of credits) and again when they recover |
+| `OPERATOR_ALERT_PHONE` | optional, your US mobile for the same alert by text. Only works once the Twilio variables below are set and approved |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | optional, for SMS lead alerts (see note) |
 
 **SMS note:** texting US numbers from a regular Twilio number requires A2P 10DLC registration (brand + campaign), which can take one to a few weeks. Email alerts work immediately; SMS turns on by itself once these three variables are set.
