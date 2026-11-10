@@ -35,13 +35,13 @@ class Client(Base):
     billing_synced_at      = Column(DateTime(timezone=True), nullable=True)  # created-time of last applied Stripe event
 
     # ── Vertical / leasing assistant ──────────────────────────────────────────
-    vertical    = Column(String, nullable=True, default="long_term")  # long_term|seasonal
+    vertical    = Column(String, nullable=True, default="general")  # general|long_term|seasonal
     lead_config = Column(JSON, nullable=True)  # validated by core.leasing.normalize_lead_config
 
     # ── Widget config ─────────────────────────────────────────────────────────
-    bot_name        = Column(String, default="Leasing Assistant")
+    bot_name        = Column(String, default="Assistant")
     primary_color   = Column(String, default="#f59e0b")
-    welcome_message = Column(String, default="Hi! Looking for a place? I can check availability and book a tour.")
+    welcome_message = Column(String, default="Hi! How can I help you today?")
     allowed_domains = Column(JSON, nullable=True)   # ["mikeshvac.com"] — jsonb in Postgres
 
     # ── Relationships ─────────────────────────────────────────────────────────
@@ -67,6 +67,12 @@ class Client(Base):
     )
     appointments = relationship(
         "Appointment",
+        back_populates="client",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    escalations = relationship(
+        "Escalation",
         back_populates="client",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -221,6 +227,57 @@ class Lead(Base):
         Index("ix_leads_client_created", "client_id", "created_at"),
         Index("ix_leads_client_session", "client_id", "session_id"),
         Index("ix_leads_created", "created_at"),  # retention
+    )
+
+
+class Escalation(Base):
+    """A chat that needs a person. One active record per (client, chat session).
+
+    Written before any email goes out, so a failed or unconfigured alert never
+    loses the request: the owner still sees it in the portal, and the sweep
+    retries the email. Works for every business type.
+    """
+    __tablename__ = "escalations"
+
+    id         = Column(String, primary_key=True, index=True)  # str(uuid.uuid4())
+    client_id  = Column(
+        String,
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    session_id = Column(String, nullable=False, index=True)
+
+    # collecting = asked the visitor for contact details, still waiting
+    # open       = the owner needs to follow up
+    # closed     = the owner marked it handled
+    status       = Column(String, nullable=False, default="collecting")
+    source       = Column(String, nullable=True)   # gate|triage|resolver|intake|error
+    action       = Column(String, nullable=True)   # collect_contact|human_handoff
+    reason       = Column(Text, nullable=True)
+    last_message = Column(Text, nullable=True)     # what the visitor said that triggered it
+    transcript   = Column(Text, nullable=True)     # the chat so far, kept for alert retries
+    lang         = Column(String, nullable=True)   # language of the fixed replies (en|es)
+    ask_count    = Column(Integer, default=0)      # turns since asking for contact with none given
+
+    contact_name  = Column(String, nullable=True)
+    contact_email = Column(String, nullable=True)
+    contact_phone = Column(String, nullable=True)
+
+    # ── Owner alert bookkeeping ───────────────────────────────────────────────
+    notified_at         = Column(DateTime(timezone=True), nullable=True)  # first alert delivered
+    contact_notified_at = Column(DateTime(timezone=True), nullable=True)  # alert carrying the contact delivered
+    notify_attempts     = Column(Integer, default=0)
+
+    created_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=True)
+
+    client = relationship("Client", back_populates="escalations")
+
+    __table_args__ = (
+        Index("ix_esc_client_created", "client_id", "created_at"),
+        Index("ix_esc_client_session", "client_id", "session_id"),
+        Index("ix_esc_created", "created_at"),  # retention
     )
 
 

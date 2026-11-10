@@ -57,9 +57,10 @@
 
     <nav class="jump">
       <a href="#billing">Plan</a>
+      <a href="#escalations">Needs a person</a>
       <a href="#appointments" class="rental-only" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>Appointments</a>
       <a href="#leads" class="rental-only" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>Leads</a>
-      <a href="#leasing">Leasing assistant</a>
+      <a href="#leasing">Business type and alerts</a>
       <a href="#install">Install</a>
       <a href="#kb">Knowledge base</a>
       <a href="#settings">Appearance</a>
@@ -112,6 +113,12 @@
       <div id="billingStatus" class="set-status"></div>
     </div>
 
+    <div class="card" id="escalations">
+      <h2>Needs a person</h2>
+      <p>Chats your assistant handed to you: the visitor asked for a person, raised a complaint, or needed something only your team can do. Each one is emailed to you the moment it happens, and it stays here even if an email doesn't arrive. This list refreshes on its own.</p>
+      <div id="escList" class="lead-list"><div class="empty">Loading...</div></div>
+    </div>
+
     <div class="card rental-only" id="leads" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Leads</h2>
@@ -129,8 +136,8 @@
     </div>
 
     <div class="card" id="leasing">
-      <h2>Leasing assistant</h2>
-      <p>Turn this on and your assistant will pre-qualify renters or guests around the clock, then send you each lead instantly.</p>
+      <h2>Business type and alerts</h2>
+      <p>Your assistant answers customer questions for any kind of business. If you rent out homes or vacation stays, pick a rental type to also pre-qualify renters or guests, capture leads and book tours.</p>
       <div class="kb-form">
         <label class="fld">Business type
           <select id="lsVertical" onchange="renderLeasing()">
@@ -186,16 +193,17 @@
           <label class="fld" id="lsBookWrap">Tour / call scheduling link (optional, e.g. Calendly)
             <input id="lsBook" type="url" placeholder="https://...">
           </label>
-          <label class="fld">Send lead alerts to this email
-            <input id="lsEmail" type="email" placeholder="">
-          </label>
-          <label class="fld">Also text lead alerts to (US mobile, optional)
-            <input id="lsPhone" type="tel" placeholder="(239) 555-0123">
-          </label>
           <p class="fine">Built with Fair Housing in mind: questions use fixed wording and are asked the same way to everyone, the assistant only collects answers (it never screens, scores, or turns anyone away), assistance-animal and accommodation requests are flagged for you personally, and replies that describe who a home "suits" are blocked. This isn't legal advice, so have your own counsel review your criteria.</p>
         </div>
+        <label class="fld">Send alerts to this email
+          <input id="lsEmail" type="email" placeholder="">
+          <span class="q-text">Where "needs a person" alerts (and leads, for rentals) go. Leave blank to use your account email.</span>
+        </label>
+        <label class="fld">Also text alerts to (US mobile, optional)
+          <input id="lsPhone" type="tel" placeholder="(239) 555-0123">
+        </label>
         <div class="row">
-          <button class="btn-primary" onclick="saveLeasing(this)">Save leasing settings</button>
+          <button class="btn-primary" onclick="saveLeasing(this)">Save</button>
           <span id="lsStatus" class="set-status"></span>
         </div>
       </div>
@@ -229,7 +237,7 @@
       <div class="kpis" id="kpis">Loading...</div>
     </div>
 
-    <div class="card" id="insights">
+    <div class="card rental-only" id="insights" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Insights</h2>
         <select id="insDays" onchange="loadInsights()" style="width:auto">
@@ -242,7 +250,7 @@
 
     <div class="card" id="kb">
       <h2>Knowledge base</h2>
-      <p>Add the FAQs, policies, and docs your assistant should answer from. Changes take effect immediately. The assistant only states prices, fees, availability, and policies that appear here.</p>
+      <p>Add the FAQs, policies, and docs your assistant should answer from. Changes take effect immediately. The assistant only states prices, fees, hours, availability, and policies that appear here.</p>
       <div id="kbSuggest" class="suggest"></div>
       <div id="kbForm" class="kb-form">
         <input id="kbTitle" type="text" placeholder="Title">
@@ -376,12 +384,18 @@
         const res = await fetch('/api/portal/analytics');
         if (!res.ok) throw new Error('bad status');
         const d = await res.json();
-        document.getElementById('kpis').innerHTML =
-          kpi('Conversations (30d)', d.conversations) +
-          kpi('Leads (30d)', d.leads_complete + d.leads_partial) +
-          kpi('After hours', d.leads_after_hours) +
-          kpi('Tours booked', d.tours_booked) +
-          kpi('Upcoming tours', d.tours_upcoming);
+        document.getElementById('kpis').innerHTML = d.rental
+          ? kpi('Conversations (30d)', d.conversations) +
+            kpi('Leads (30d)', d.leads_complete + d.leads_partial) +
+            kpi('After hours', d.leads_after_hours) +
+            kpi('Tours booked', d.tours_booked) +
+            kpi('Upcoming tours', d.tours_upcoming) +
+            kpi('Needed a person (30d)', d.escalations)
+          : kpi('Conversations (30d)', d.conversations) +
+            kpi('Answered by your assistant', d.conversations ? Math.max(0, Math.round(100 * (d.conversations - d.escalations) / d.conversations)) + '%' : 'n/a') +
+            kpi('Needed a person (30d)', d.escalations) +
+            kpi('Left contact details', d.escalations_with_contact) +
+            kpi('Waiting on you', d.escalations_waiting);
       } catch (e) { document.getElementById('kpis').textContent = 'Could not load analytics.'; }
     }
 
@@ -545,7 +559,7 @@
         document.getElementById('lsPhone').value = c.notify_phone || '';
         fillSchedule(c.schedule || {});
         renderLeasing(true);
-      } catch (e) { document.getElementById('lsStatus').textContent = 'Could not load leasing settings.'; }
+      } catch (e) { document.getElementById('lsStatus').textContent = 'Could not load these settings.'; }
     }
 
     const PRESETS = {
@@ -575,7 +589,15 @@
       const v = document.getElementById('lsVertical').value;
       const status = document.getElementById('lsStatus');
       const body = { vertical: v };
-      if (RENTAL.includes(v)) {
+      if (!RENTAL.includes(v)) {
+        // General accounts have no intake questions. Keep everything else that
+        // was saved (so switching back to a rental type loses nothing).
+        body.config = Object.assign({}, (leasing && leasing.config) || {}, {
+          questions: [],
+          notify_email: document.getElementById('lsEmail').value.trim(),
+          notify_phone: document.getElementById('lsPhone').value.trim(),
+        });
+      } else {
         const qs = Array.from(document.querySelectorAll('#lsQuestions input[data-q]')).filter(i => i.checked || i.disabled).map(i => i.dataset.q);
         body.config = {
           questions: qs,
@@ -597,7 +619,8 @@
           leasing.vertical = d.vertical; leasing.config = d.config || leasing.config;
           status.textContent = 'Saved.';
           if (d.config) { document.getElementById('lsPhone').value = d.config.notify_phone || ''; fillSchedule(d.config.schedule || {}); }
-          loadLeads(); loadAppointments();
+          loadAnalytics();
+          if (RENTAL.includes(v)) { loadLeads(); loadAppointments(); loadInsights(); }
         } else { status.textContent = d.error || 'Could not save.'; }
       } catch (e) { status.textContent = 'Network error.'; }
       btn.disabled = false;
@@ -687,6 +710,40 @@
       } catch (e) { alert('Network error.'); btn.disabled = false; }
     }
 
+    // ── Needs a person ─────────────────────────────────────────────────────
+    const openEscs = new Set();
+    async function loadEscalations() {
+      const list = document.getElementById('escList');
+      try {
+        const r = await fetch('/api/portal/escalations');
+        if (!r.ok) throw new Error('bad status');
+        const rows = (await r.json()).escalations || [];
+        if (!rows.length) { list.innerHTML = '<div class="empty">Nothing here yet. When a visitor needs a person, the chat shows up here and in your email.</div>'; return; }
+        list.innerHTML = rows.map(e => {
+          const badge = e.status === 'closed' ? '<span class="badge">Handled</span>'
+            : e.status === 'collecting' ? '<span class="badge flag">Waiting for contact details</span>' : '<span class="badge hot">Needs follow-up</span>';
+          const contact = [e.phone, e.email].filter(Boolean).map(esc).join(' · ');
+          const done = e.status === 'closed';
+          return `<div class="lead ${openEscs.has(e.id) ? 'open' : ''}" id="esc-${e.id}">
+            <div class="lead-head" onclick="toggleEsc('${e.id}')">
+              <div><div class="lead-name">${esc(e.name || 'Website visitor')}${badge}</div>
+                <div class="lead-sub">${contact || 'No contact details shared'} · ${fmtTime(e.created_at)}</div></div>
+              <button class="btn-ghost" onclick="event.stopPropagation(); setEscStatus('${e.id}', '${done ? 'open' : 'closed'}')">${done ? 'Reopen' : 'Mark handled'}</button>
+            </div>
+            <div class="lead-body"><div><span class="k">Why:</span> ${esc(e.reason || 'Not specified')}</div>
+              <div><span class="k">They said:</span> ${esc(e.last_message)}</div>
+              <div class="k" style="margin-top:0.5rem">Conversation</div>
+              <div style="white-space:pre-wrap;font-size:0.82rem">${esc(e.transcript)}</div></div>
+          </div>`;
+        }).join('');
+      } catch (e) { list.innerHTML = '<div class="empty">Could not load this list.</div>'; }
+    }
+    function toggleEsc(id) { const el = document.getElementById('esc-' + id); el.classList.toggle('open'); el.classList.contains('open') ? openEscs.add(id) : openEscs.delete(id); }
+    async function setEscStatus(id, value) {
+      try { const r = await fetch('/api/portal/escalations/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: value }) });
+        if (!r.ok) alert('Could not update this chat.'); else { loadEscalations(); loadAnalytics(); } } catch (e) { alert('Network error.'); }
+    }
+
     // ── Leads ──────────────────────────────────────────────────────────────
     const openLeads = new Set();
     function fmtTime(iso) { if (!iso) return ''; const d = new Date(iso); return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
@@ -727,6 +784,14 @@
 
     // ── Suggested KB articles ──────────────────────────────────────────────
     const SUGGEST = {
+      general: {
+        'Hours and location': 'Your opening hours for each day, holiday closures, your address, and parking or directions if useful.',
+        'Products or services and pricing': 'What you offer and what it costs. List each product, service or plan with its price and what is included.',
+        'Shipping and delivery': 'Where you ship or deliver, how long it takes, what it costs, and how customers track an order.',
+        'Returns and refunds': 'Your return window, the condition items must be in, how to start a return, and when refunds are issued.',
+        'How to contact the team': 'The best phone number or email for customers, when someone answers, and how fast you usually reply.',
+        'Frequently asked questions': 'The questions you answer most often, each with its answer. One question and answer per paragraph works well.',
+      },
       long_term: {
         'Available units and pricing': 'List each available property or unit: address or name, beds/baths, square feet, monthly rent, deposit, and the date it is available.',
         'Application process and fees': 'How to apply, the application fee, what documents are needed, and how long approval usually takes.',
@@ -755,18 +820,19 @@
       const v = document.getElementById('lsVertical').value;
       cancelEdit();
       document.getElementById('kbTitle').value = title;
-      document.getElementById('kbCategory').value = 'leasing';
+      document.getElementById('kbCategory').value = RENTAL.includes(v) ? 'leasing' : 'general';
       document.getElementById('kbContent').value = '';
       document.getElementById('kbContent').placeholder = (SUGGEST[v] || {})[title] || '';
       document.getElementById('kbContent').focus();
       document.getElementById('kbForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
+    const isRental = () => RENTAL.includes(document.getElementById('lsVertical').value);
     loadAnalytics();
-    loadInsights();
     loadArticles();
-    loadLeasing().then(() => { loadLeads(); loadAppointments(); });
-    setInterval(() => { if (RENTAL.includes(document.getElementById('lsVertical').value)) { loadLeads(); loadAppointments(); } }, 30000);
+    loadEscalations();
+    loadLeasing().then(() => { if (isRental()) { loadLeads(); loadAppointments(); loadInsights(); } });
+    setInterval(() => { loadEscalations(); if (isRental()) { loadLeads(); loadAppointments(); } }, 30000);
   </script>
 </body>
 </html>

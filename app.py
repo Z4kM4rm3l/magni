@@ -32,8 +32,9 @@ from core.csrf import get_csrf_token, rotate_csrf_token, csrf_valid
 from core.billing_policies import TRIAL_DAYS, SELF_SERVE_PLANS, TIER_LIMITS
 from core.leasing import (
     VERTICALS, RENTAL_VERTICALS, QUESTION_CATALOG, available_questions,
-    normalize_lead_config, LeadConfigError,
+    normalize_lead_config, LeadConfigError, DEFAULT_BOT_NAME, is_rental_vertical,
 )
+from core import escalations
 from core.leads import list_leads, set_owner_status, leads_csv, OWNER_STATUSES
 from core import scheduling
 from core.lead_flow import on_appointment_canceled, _lead_lang
@@ -355,7 +356,31 @@ def portal_insights():
 @app.route("/api/portal/analytics", methods=["GET"])
 @client_login_required
 def portal_analytics():
-    return jsonify(leasing_metrics(current_client_id()))
+    cid = current_client_id()
+    client = get_client(cid)
+    data = leasing_metrics(cid)
+    data.update(escalations.metrics(cid))
+    data["rental"] = bool(client) and is_rental_vertical(client["vertical"])
+    return jsonify(data)
+
+
+@app.route("/api/portal/escalations", methods=["GET"])
+@client_login_required
+def portal_escalations():
+    """Chats that need a person, newest first. Tenant comes from the session only."""
+    return jsonify({"escalations": escalations.list_for_client(current_client_id())})
+
+
+@app.route("/api/portal/escalations/<esc_id>", methods=["PUT"])
+@client_login_required
+def portal_escalation_update(esc_id):
+    status = ((request.get_json() or {}).get("status") or "").strip()
+    if status not in ("open", "closed"):
+        return jsonify({"error": "status must be open or closed"}), 400
+    record = escalations.set_status(current_client_id(), esc_id, status)
+    if not record:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify({"escalation": record})
 
 
 @app.route("/api/portal/settings", methods=["PUT"])
@@ -716,7 +741,7 @@ def clients_create():
         business_name=sanitize_input(data["business_name"]),
         email=sanitize_input(data["email"]),
         tier=data.get("tier", "starter"),
-        bot_name=sanitize_input(data.get("bot_name", "Leasing Assistant")),
+        bot_name=sanitize_input(data.get("bot_name") or DEFAULT_BOT_NAME),
         api_key=data.get("api_key", ""),
         billing_date=data.get("billing_date", "")
     )
@@ -810,7 +835,9 @@ def analytics_data():
     client_id, err = _resolve_admin_client_id(request.args)
     if err:
         return err
-    return jsonify(leasing_metrics(client_id))
+    data = leasing_metrics(client_id)
+    data.update(escalations.metrics(client_id))
+    return jsonify(data)
 
 
 if __name__ == "__main__":

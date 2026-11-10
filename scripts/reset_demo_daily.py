@@ -21,7 +21,7 @@ load_dotenv()
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from core.db import SessionLocal
-from core.models import Client, Lead, Appointment, Conversation, Message
+from core.models import Client, Lead, Appointment, Conversation, Message, Escalation
 from core.utils import logger
 
 DEMO_CLIENT_ID = "demo"
@@ -39,6 +39,7 @@ def reset_demo_usage():
         demo.monthly_used = 0
         db.query(Appointment).filter(Appointment.client_id == DEMO_CLIENT_ID).delete()
         db.query(Lead).filter(Lead.client_id == DEMO_CLIENT_ID).delete()
+        db.query(Escalation).filter(Escalation.client_id == DEMO_CLIENT_ID).delete()
         demo_sessions = db.query(Conversation.session_id).filter(Conversation.client_id == DEMO_CLIENT_ID)
         db.query(Message).filter(Message.session_id.in_(demo_sessions.scalar_subquery())).delete(synchronize_session=False)
         db.query(Conversation).filter(Conversation.client_id == DEMO_CLIENT_ID).delete(synchronize_session=False)

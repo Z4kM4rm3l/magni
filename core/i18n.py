@@ -183,6 +183,43 @@ STRINGS = {
         "en": "For your current home or lease, here's how to reach the office: {contact}",
         "es": "Para su vivienda o contrato actual, así puede comunicarse con la oficina: {contact}",
     },
+    # ── Chats that need a person (every business type) ─────────────────────
+    "esc_ask_contact": {
+        "en": "So the right person can follow up with you, what's your name and the best email or phone number to reach you?",
+        "es": "Para que la persona indicada pueda comunicarse con usted, ¿cuál es su nombre y el mejor correo electrónico o número de teléfono para contactarle?",
+    },
+    "esc_ask_reach": {
+        "en": "Thanks, {name}. What's the best email or phone number to reach you?",
+        "es": "Gracias, {name}. ¿Cuál es el mejor correo electrónico o número de teléfono para contactarle?",
+    },
+    "esc_thanks": {
+        "en": "Thank you{name}. I've passed this along to the team, and someone will follow up with you at {contact}.",
+        "es": "Gracias{name}. Le pasé esto al equipo y alguien se comunicará con usted al {contact}.",
+    },
+    "esc_notified": {
+        "en": "I've passed this along to the team with your contact details, and someone will follow up with you.",
+        "es": "Le pasé esto al equipo con sus datos de contacto y alguien se comunicará con usted.",
+    },
+    "esc_noted": {
+        "en": "I've let the team know about this conversation.",
+        "es": "Le avisé al equipo sobre esta conversación.",
+    },
+    "esc_no_contact": {
+        "en": "No problem. I've let the team know about this conversation. Is there anything else I can help with?",
+        "es": "No hay problema. Le avisé al equipo sobre esta conversación. ¿Hay algo más en lo que pueda ayudarle?",
+    },
+    "esc_reminder": {
+        "en": "If you'd like the team to follow up with you, just share an email or phone number here.",
+        "es": "Si desea que el equipo se comunique con usted, comparta aquí un correo electrónico o número de teléfono.",
+    },
+    "esc_person_needed": {
+        "en": "I want to make sure you get the right help, so I'm passing this to the team.",
+        "es": "Quiero asegurarme de que reciba la ayuda adecuada, así que le paso esto al equipo.",
+    },
+    "esc_trouble": {
+        "en": "I'm sorry, I'm having trouble answering right now, so I'm passing this to the team.",
+        "es": "Lo siento, tengo problemas para responder en este momento, así que le paso esto al equipo.",
+    },
     "emergency": {
         "en": "If this is an emergency (fire, a gas smell, flooding), call 911 first.",
         "es": "Si es una emergencia (incendio, olor a gas, inundación), llame primero al 911.",

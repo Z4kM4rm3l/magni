@@ -12,6 +12,7 @@ The operator panel routes (/admin, /api/*) are not affected.
 import uuid
 from flask import Blueprint, request, jsonify, make_response, current_app
 from core.billing_policies import shows_branding
+from core.leasing import default_identity
 from core.db import SessionLocal
 from core.models import Client
 from core.utils import sanitize_input, logger
@@ -91,10 +92,11 @@ def widget_config():
     if not client:
         return jsonify({"error": "Invalid or inactive API key"}), 403
 
+    default_name, default_welcome = default_identity(client.vertical)
     resp = make_response(jsonify({
-        "bot_name":       client.bot_name or "Leasing Assistant",
+        "bot_name":       client.bot_name or default_name,
         "primary_color":  client.primary_color or "#f59e0b",
-        "welcome_message": client.welcome_message or "Hi! Looking for a place? I can check availability and book a tour.",
+        "welcome_message": client.welcome_message or default_welcome,
         "branding":       shows_branding(client),
     }))
     return _add_cors(resp, client)
@@ -193,7 +195,7 @@ _MAGNI_JS = r"""
   var API_KEY = script.getAttribute('data-api-key');
   var BASE_URL = script.src.replace('/widget/magni.js', '');
   var sessionId = null;  // server-issued on first message
-  var config = { bot_name: 'Leasing Assistant', primary_color: '#f59e0b', welcome_message: 'Hi! Looking for a place? I can check availability and book a tour.' };
+  var config = { bot_name: 'Assistant', primary_color: '#f59e0b', welcome_message: 'Hi! How can I help you today?' };
 
   // ── Fetch config ────────────────────────────────────────────────────────
   fetch(BASE_URL + '/widget/config?key=' + encodeURIComponent(API_KEY))
@@ -240,7 +242,7 @@ _MAGNI_JS = r"""
       '<div id="mgn-footer"><input id="mgn-input" type="text" placeholder="Type a message..."/><button id="mgn-send">Send</button></div>';
 
     // Owner-typed text goes in as text, never as HTML.
-    panel.querySelector('#mgn-header').textContent = config.bot_name || 'Leasing Assistant';
+    panel.querySelector('#mgn-header').textContent = config.bot_name || 'Assistant';
 
     // Starter plans and trials show a small "Powered by Magni" link.
     if (config.branding) {
@@ -262,7 +264,7 @@ _MAGNI_JS = r"""
     var open = false;
 
     // Welcome message
-    appendMsg(config.welcome_message || 'Hi! Looking for a place? I can check availability and book a tour.', 'bot');
+    appendMsg(config.welcome_message || 'Hi! How can I help you today?', 'bot');
 
     bubble.addEventListener('click', function () {
       open = !open;
