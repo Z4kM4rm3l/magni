@@ -14,7 +14,7 @@ cases = [
         "label": "billing question gets a real response",
         "payload": {
             "message": "Why was I charged twice this month?",
-            "intent": "billing",
+            "intent": "account",
             "history_summary": "No prior context.",
             "history": [],
         },
@@ -28,7 +28,7 @@ cases = [
         "label": "technical question gets step-based response",
         "payload": {
             "message": "I can't log in. The page just refreshes.",
-            "intent": "technical",
+            "intent": "account",
             "history_summary": "No prior context.",
             "history": [],
         },

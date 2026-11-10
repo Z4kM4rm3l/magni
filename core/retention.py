@@ -3,24 +3,19 @@ core/retention.py
 
 How long Magni keeps what visitors type. Run daily by scripts/apply_retention.py.
 
-  Chat transcripts (conversations + messages)   12 months after the chat started
-  Leads                                          24 months after the lead came in
-  Appointments                                   24 months after the appointment
+  Chat transcripts (conversations + messages)    12 months after the chat started
   "Needs a person" records (hold a transcript)   12 months after the chat was flagged
 
-Owners can export their leads to CSV from the portal at any time before then.
-The same periods are stated in the portal and belong in the terms / privacy
+The same period is stated in the portal and belongs in the terms / privacy
 policy. Deletes run in batches so a big backlog never holds a long lock.
 """
 from datetime import datetime, timezone, timedelta
 
 from core.db import SessionLocal
-from core.models import Conversation, Message, Lead, Appointment, Escalation
+from core.models import Conversation, Message, Escalation
 from core.utils import logger
 
 CHAT_RETENTION_DAYS = 365
-LEAD_RETENTION_DAYS = 730
-APPOINTMENT_RETENTION_DAYS = 730
 BATCH = 500
 
 
@@ -45,15 +40,11 @@ def _drop_messages(db, session_ids):
 def apply_retention(now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     chats_before = now - timedelta(days=CHAT_RETENTION_DAYS)
-    leads_before = now - timedelta(days=LEAD_RETENTION_DAYS)
-    appts_before = now - timedelta(days=APPOINTMENT_RETENTION_DAYS)
     db = SessionLocal()
     try:
         out = {
             "conversations": _delete_in_batches(db, Conversation, Conversation.session_id,
                                                 Conversation.started_at < chats_before, _drop_messages),
-            "appointments": _delete_in_batches(db, Appointment, Appointment.id, Appointment.end_at < appts_before),
-            "leads": _delete_in_batches(db, Lead, Lead.id, Lead.created_at < leads_before),
             # "Needs a person" records hold the chat transcript, so they follow the chat period.
             "escalations": _delete_in_batches(db, Escalation, Escalation.id, Escalation.created_at < chats_before),
         }

@@ -1,7 +1,7 @@
 """
 core/escalations.py
 
-Chats that need a person, for every business type.
+Chats that need a person.
 
 What this module guarantees:
   * A durable record is written BEFORE any alert is sent, so a failed or
@@ -19,6 +19,8 @@ Nothing here raises into a chat turn: every public function logs and returns a
 safe value on error.
 """
 import re
+import threading
+import time
 import uuid
 from datetime import datetime, timezone, timedelta
 
@@ -26,8 +28,8 @@ from core import notifier
 from core.db import SessionLocal
 from core.emailer import build_escalation_alert, build_transcript
 from core.i18n import detect_lang, t
-from core.leasing import find_email, find_phone
-from core.models import Escalation, Lead
+from core.contact import find_email, find_phone
+from core.models import Escalation
 from core.utils import logger
 
 DEMO_CLIENT_ID = "demo"  # the landing-page demo never emails or texts anyone
@@ -169,8 +171,7 @@ def find_contact(text: str) -> dict:
 
 
 def _contact_from_chat(db, client_id, session_id, history, message) -> dict:
-    """Contact details the visitor already gave earlier in this chat: in their
-    own messages, or in a leasing intake for the same session."""
+    """Contact details the visitor already gave earlier in this chat."""
     out = {"name": None, "email": None, "phone": None}
     for text in [m.get("content", "") for m in (history or []) if m.get("role") == "user"] + [message or ""]:
         out["email"] = find_email(text) or out["email"]
@@ -178,12 +179,6 @@ def _contact_from_chat(db, client_id, session_id, history, message) -> dict:
         m = _NAME_INTRO_RE.search(text or "")
         if m:
             out["name"] = _clean_name(m.group(1)) or out["name"]
-    lead = (db.query(Lead).filter(Lead.client_id == client_id, Lead.session_id == session_id)
-            .order_by(Lead.created_at.desc()).first())
-    if lead:
-        out["name"] = lead.contact_name or out["name"]
-        out["email"] = lead.contact_email or out["email"]
-        out["phone"] = lead.contact_phone or out["phone"]
     return out
 
 
@@ -411,7 +406,7 @@ def deliver(esc_id: str) -> bool:
     or the follow-up carrying contact details that arrived later. Marks the
     record only when the email actually went out, so retry_unsent() can pick up
     anything that failed."""
-    from core import lead_flow
+    from core.client_manager import client_context
     try:
         db = SessionLocal()
     except Exception as e:
@@ -431,11 +426,11 @@ def deliver(esc_id: str) -> bool:
             esc.contact_notified_at = now if _has_contact(esc) else None
             db.commit()
             return True
-        ctx = lead_flow.load_client_context(esc.client_id)
+        ctx = client_context(esc.client_id)
         if not ctx:
             return False
-        to_email = (ctx["config"].get("notify_email") or ctx["email"] or "").strip()
-        to_phone = ctx["config"].get("notify_phone") or ""
+        to_email = (ctx["notify_email"] or ctx["email"] or "").strip()
+        to_phone = ctx["notify_phone"] or ""
         contact = {"name": esc.contact_name, "email": esc.contact_email, "phone": esc.contact_phone}
         subject, body, reply_to = build_escalation_alert(
             ctx["business_name"], reason=esc.reason or "", action=esc.action or "",
@@ -493,6 +488,25 @@ def retry_unsent() -> int:
     return sum(1 for i in ids if deliver(i))
 
 
+_retry_lock = threading.Lock()
+_last_retry = {"t": 0.0}
+RETRY_EVERY_SECONDS = 60
+
+
+def maybe_retry() -> None:
+    """Cheap opportunistic trigger from live chat traffic, at most once a
+    minute per process. scripts/retry_alerts.py does the same on a schedule for
+    quiet periods."""
+    now = time.time()
+    if now - _last_retry["t"] < RETRY_EVERY_SECONDS or not _retry_lock.acquire(blocking=False):
+        return
+    try:
+        _last_retry["t"] = now
+        retry_unsent()
+    finally:
+        _retry_lock.release()
+
+
 # ── Portal ──────────────────────────────────────────────────────────────────
 def list_for_client(client_id: str, limit: int = 100) -> list[dict]:
     db = SessionLocal()
@@ -528,14 +542,21 @@ def set_status(client_id: str, esc_id: str, status: str) -> dict | None:
 
 
 def metrics(client_id: str, days: int = 30) -> dict:
-    """Counts for the portal's Analytics card. Database-side counts only."""
+    """The numbers on the Analytics card: chats, and how many needed a person.
+    Every number is a COUNT in the database (indexed by client and date), so it
+    stays fast however much history a tenant has."""
     from sqlalchemy import func
+    from core.models import Conversation
     since = _now() - timedelta(days=days)
     db = SessionLocal()
     try:
+        conv = db.query(func.count(Conversation.session_id)).filter(Conversation.client_id == client_id)
         base = db.query(func.count(Escalation.id)).filter(Escalation.client_id == client_id)
         recent = base.filter(Escalation.created_at >= since)
         return {
+            "days": days,
+            "conversations": conv.filter(Conversation.started_at >= since).scalar() or 0,
+            "conversations_all_time": conv.scalar() or 0,
             "escalations": recent.scalar() or 0,
             "escalations_with_contact": recent.filter(
                 (Escalation.contact_email.isnot(None)) | (Escalation.contact_phone.isnot(None))).scalar() or 0,

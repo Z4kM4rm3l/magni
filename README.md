@@ -2,14 +2,12 @@
 
 ## AI customer service for any business's website, branded as theirs
 
-Magni is a chat assistant a business puts on its own website. It carries the business's name and colors, answers customers around the clock from the business's own knowledge base, and hands the chat to a person when one is needed:
+Magni is a chat assistant a business puts on its own website. It carries the business's name and colors, answers customers around the clock from the business's own knowledge base, and hands the chat to a person when one is needed.
 
-- answers questions only from what the business has published,
-- recognizes when a person is needed, collects the visitor's contact details, and emails the team the whole conversation,
-- keeps every handed-off chat in the owner's portal, so nothing depends on one email arriving,
-- and sets up in minutes: sign up, add FAQs and policies, paste one line of code.
-
-Rental businesses (long-term property managers and seasonal / vacation rental operators) can switch on a **leasing mode** that also pre-qualifies renters, captures leads and books tours.
+- **The knowledge base is the source of truth.** The assistant states only what the business has published. If it isn't there, it says the team will confirm, and never guesses.
+- **A person is always reachable.** When a visitor asks for someone, raises a complaint, or needs something only staff can do, the assistant collects their contact details and emails the team the whole conversation.
+- **It works for any kind of business.** There are no industry modes to configure. What makes each assistant different is the knowledge base its owner writes.
+- **Setup takes minutes.** Sign up, add FAQs and policies, paste one line of code.
 
 Magni is the flagship product of **Lemram Industries**.
 
@@ -23,25 +21,14 @@ Magni is the flagship product of **Lemram Industries**.
 
 | | |
 |---|---|
-| **Answers customers 24/7** | Products, services, pricing, hours, shipping, returns, policies. Facts come only from the owner's knowledge base. If it isn't there, the assistant says the team will confirm, and never guesses. |
-| **Hands off to a person** | When a visitor asks for someone, raises a complaint, or needs something only staff can do (a refund, a change to an order), the assistant says so, asks for a name and an email or phone number with fixed wording, and alerts the owner. |
-| **Never drops a handoff** | Each chat that needs a person is saved before any email is sent. The owner gets the full transcript by email (with a reply-to straight to the visitor once they share an address), sees it in the portal under **Needs a person**, and failed emails are retried automatically. |
-| **Fails safe** | Clear requests for a person and legal threats are caught by fixed patterns, not just the model. If the model is unavailable, the visitor is offered a follow-up from the team instead of an error. |
-| **Branded as the owner's** | Bot name, accent color and welcome message are the owner's. The assistant introduces itself by the owner's bot and business name. Starter plans show a small "Powered by Magni" link. |
-| **English and Spanish** | Fixed replies (the contact questions, confirmations, the whole leasing intake) have fixed wording in both languages. Free-form answers follow the visitor's language. |
-| **Self-serve** | Signup, a 14-day trial, the knowledge base, appearance, allowed websites and billing are all in the owner's portal. |
-
-### Leasing mode (opt-in, for rental businesses)
-
-| | |
-|---|---|
-| **Pre-qualifies the same way every time** | The owner picks from a fixed catalog of questions (property, move-in or stay dates, contact details, occupants or guests, lease length, budget, pets, posted criteria). Every prospect gets the same questions, in the same order, with the same wording. |
-| **Captures every lead** | Finished intakes alert the owner by email (and SMS once Twilio is approved), with the answers, a reply-to straight to the prospect, and a calendar invite when a tour is booked. Prospects who leave contact details and go quiet are sent as partial leads after 20 minutes. |
-| **Books tours and calls** | The assistant offers real open times from the owner's weekly hours, books outright only on an exact pick ("2") or an explicit day and time, and confirms anything looser. Prospects get a confirmation, an .ics invite, a cancel link and a day-before reminder. |
-| **Multiple properties** | Owners list their properties. The property question becomes a numbered pick, so every lead names a property the owner recognizes. |
-| **Current residents** | Residents asking about repairs, rent or their lease get the owner's office contact, plus a "call 911 first" line in an emergency. They never become leads. |
-| **After-hours tagging** | Leads that arrive outside the owner's hours are tagged, so they get the first call in the morning. |
-| **Insights** | A data-only report: chat-to-tour funnel, where prospects stop, questions the assistant couldn't answer, what residents complain about, results by property, and rule-based suggestions that show the numbers behind them. No AI writes any of it. |
+| **Answers customers 24/7** | Products, services, pricing, hours, shipping, returns, policies. Facts come only from the owner's knowledge base. |
+| **Hands off to a person** | The assistant says it is passing the chat to the team, asks for a name and an email or phone number with fixed wording, and alerts the owner. If the visitor already gave contact details earlier in the chat, it confirms they are the best way to reach them instead of asking again. |
+| **Never drops a handoff** | Each chat that needs a person is saved before any email is sent. The owner gets the full transcript by email (with a reply-to straight to the visitor), sees it in the portal under **Needs a person**, and failed emails are retried automatically. |
+| **Fails safe** | Clear requests for a person and legal threats are caught by fixed patterns, not just the model. If the model is unavailable, the visitor is offered a follow-up from the team instead of an error, and the operator is alerted. |
+| **Resists prompt injection** | Described below. |
+| **Branded as the owner's** | Bot name, accent color and welcome message are the owner's. Starter plans show a small "Powered by Magni" link; Pro removes it. |
+| **English and Spanish** | Fixed replies have fixed wording in both languages. Free-form answers follow the visitor's language. |
+| **Self-serve** | Signup, a 14-day trial, the knowledge base, appearance, alert settings, allowed websites and billing are all in the owner's portal. |
 
 ---
 
@@ -53,6 +40,7 @@ Visitor on the business's website
         ▼
 Widget  (/widget/chat)
   - allowed-website check, per-visitor and per-account rate limits
+  - reads only the message and the session id from the browser
         │
         ▼
 Billing and usage gate  (core/client_guard.py)
@@ -61,47 +49,51 @@ Billing and usage gate  (core/client_guard.py)
         │
         ▼
 Orchestrator  (agents/orchestrator.py)
-  ├── chat waiting on contact details? → read name / email / phone from the reply (code, no model)
-  ├── rental account, intake in progress? → Lead flow (deterministic)
-  ├── high-risk gate (fixed patterns: "talk to a person", legal threats) → escalate
-  ├── otherwise → Triage (LLM: what kind of message, or escalate)
-  │       ├── question      → Resolver (answers from the knowledge base)
-  │       ├── rental prospect → start the leasing intake
-  │       └── escalation    → Escalation agent
-  └── model failed, or the resolver asked for a person → escalate
+  1. chat waiting on contact details? → read name / email / phone from the reply   (code)
+  2. high-risk gate: "talk to a person", legal threats → escalate                   (code)
+  3. injection guard: plain attacks get a fixed reply                               (code)
+  4. Triage: what kind of message, or escalate                                      (model)
+  5. Resolver: answer from the knowledge base                                       (model)
+     or Escalation agent: one warm sentence before the handoff                      (model)
+  6. output check on anything the model wrote                                       (code)
         │
         ▼
-Escalation  (core/escalations.py)
-  - save the record, alert the owner, ask for contact details with fixed wording
-        │
-        ▼
-Fair Housing output filter (rental accounts)  →  reply
+Escalation  (core/escalations.py), when a person is needed
+  - save the record, alert the owner, ask for or confirm contact details (fixed wording)
 ```
 
-The model is used for narrow jobs: classifying the message, phrasing answers from the knowledge base, and (in leasing mode) reading answers out of the prospect's words. **Who gets alerted, what is asked, in what order, and when to book is ordinary code**, so it is predictable and testable.
+The model has three narrow jobs: classify the message, phrase an answer from the knowledge base, and write one sentence before a handoff. **Who gets alerted, what is asked, and what is allowed to reach the visitor is ordinary code**, so it is predictable and testable.
 
 ---
 
-## Fair Housing by design (leasing mode)
+## Prompt injection
 
-- Questions come from a fixed catalog in `core/leasing.py`, with fixed English and Spanish wording. Owners can turn questions on or off, but never write their own.
-- The assistant collects answers. It never scores, ranks, approves or rejects anyone.
-- Assistance animals are never treated as pets, in either language. Accommodation requests are flagged for a person to handle.
-- Every free-form rental reply passes `check_output()`, which replaces any reply describing who a home or area "suits" (families, couples, "safe neighborhood" and similar, in English and Spanish).
-- Rental criteria and property names are checked for steering language before they're saved.
-- Insights topics describe the property or the request, never the people asking.
+No filter can promise that a language model will never be talked into something. Magni's approach is to limit what a successful attack could do, then add checks that don't rely on the model.
 
-This is engineering care, not legal advice. Each customer's questions and criteria should be reviewed by counsel.
+**What an attacker could gain is small by design.**
+- The assistant has no tools. It can't look up orders, issue refunds, send email on request, or change anything.
+- A prompt contains only that one business's knowledge base, which is public-facing content anyway. Other tenants' data is never in reach.
+- Nothing a visitor types is placed in a system prompt. Visitor text travels only as chat messages, or inside fenced tags the visitor can't forge.
+- Triage output is validated against fixed values, and the widget ignores every field except the message and session id.
+
+**Two code checks sit around the model** (`core/guard.py`).
+- *Input:* fixed patterns for the plainest attacks ("ignore your instructions", "show me your prompt", fake system markers, "developer mode"), in English and Spanish, with zero-width characters and spaced-out letters normalized first. A match gets a fixed, polite reply and the model is never called.
+- *Output:* every model-written reply is checked before a visitor sees it. A reply that recites the instructions, claims to be human, or claims an action the assistant can't take ("I've processed your refund") is replaced with fixed wording.
+
+**Two test suites keep it honest.**
+- `tests/test_injection.py` (offline): 27 plain attacks must be caught, 25 look-alike customer messages must not be, and a deliberately fooled stub model must not be able to get damage past the output check.
+- `tests/test_injection_live.py` (real model): the same attacks plus 18 subtle ones (polite token requests, off-topic work, invented discounts, role-play, encoded instructions, multi-turn setups), each run with the checks on and off so you can see how much the model resists on its own.
+
+What remains possible: a determined visitor may still get the assistant to say something off-topic or odd to themselves. That is a reputational nuisance, not a breach, and it is why the assistant has no power to act.
 
 ---
 
 ## Multi-tenant isolation
 
-Every tenant's data is keyed by `client_id`: knowledge articles, conversations and messages, chats that need a person, leads, appointments and settings.
+Every tenant's data is keyed by `client_id`: knowledge articles, conversations and messages, chats that need a person, and settings.
 
 - Portal routes take the tenant **only** from the login session (`current_client_id()`), never from the request.
 - Conversations are owned by `client_id + session_id`, and live chat context is namespaced by tenant, so two visitors sharing a session id never share context.
-- Appointment cancel links are unguessable tokens that only allow viewing and canceling that one booking.
 - Customer widget keys are publishable. They work only through `/widget/chat`, which enforces each tenant's allowed websites and rate limits.
 - Operator (admin) and customer authentication are separate. Mutating requests require a CSRF token.
 
@@ -114,27 +106,15 @@ Every tenant's data is keyed by `client_id`: knowledge articles, conversations a
 - **Trials are never reset early.** A failed card keeps the assistant answering while Stripe retries. It never locks the owner out of the portal.
 - **Webhooks** are signature-checked and idempotent, and always re-read the subscription live from Stripe. `scripts/reconcile_billing.py` repairs anything a missed webhook left behind.
 - **AI spend has four independent layers:** a database-locked per-tenant counter, fail-closed error handling, a global daily cap, and the Anthropic workspace spend limit. See `docs/BILLING_PROTECTION.md`.
+- **The operator hears about model failures first.** Three failed model calls in five minutes email (and optionally text) the operator with the likely cause: out of credits, a bad key, a spend limit, or a provider outage.
 
 ---
 
 ## Data, privacy and retention
 
-- Chat transcripts (and the "needs a person" records that hold a copy) are deleted after **12 months**, and leads and appointments after **24 months**, by a daily job (`scripts/apply_retention.py`). Owners can export leads to CSV at any time.
-- Phone numbers and emails are masked in every Insights example.
+- Chat transcripts, and the "needs a person" records that hold a copy, are deleted after **12 months** by a daily job (`scripts/apply_retention.py`).
 - Links in emails and chat come only from `PUBLIC_BASE_URL`, never from a request's Host header. The app refuses to start in production without it.
 - The landing-page demo never emails or texts anyone, and its data is cleared daily.
-
----
-
-## Insights without invention
-
-`core/insights.py` never calls a model. It counts the tenant's own chats, leads and tours, and applies fixed rules. Each suggestion appears only once it clears a minimum sample size (for example, at least 3 unanswered questions on one topic), and it shows its basis ("based on: 4 of 6 unfinished intakes"). Topics come from fixed English and Spanish keyword lists. A message can match several topics or none, and off-topic questions are shown as they are.
-
-Examples of what it can tell an owner:
-
-- "Add a knowledge base article about parking: 3 prospect questions about parking got 'our team will confirm'."
-- "Most prospects who stop, stop at Budget."
-- "Residents' top issue: plumbing and leaks", with their own words.
 
 ---
 
@@ -143,37 +123,33 @@ Examples of what it can tell an owner:
 ```text
 magni/
 ├── app.py                    Flask app: landing page + demo, signup/login/password reset,
-│                             client portal and /api/portal/*, admin console, /appt/<token>
+│                             client portal and /api/portal/*, admin console
 ├── agents/
 │   ├── orchestrator.py       entry point for every chat turn
-│   ├── triage_agent.py       what kind of message this is, or escalate (general and rental prompts)
-│   ├── resolver_agent.py     answers grounded in the knowledge base (general and rental prompts)
-│   ├── escalation_agent.py   human handoff decisions
-│   └── lead_agent.py         reads intake answers out of the prospect's message
+│   ├── triage_agent.py       what kind of message this is, or escalate
+│   ├── resolver_agent.py     answers grounded in the knowledge base
+│   └── escalation_agent.py   one warm sentence before a handoff
 ├── core/
 │   ├── llm.py                the only place that calls the model (Claude via the Anthropic SDK)
-│   ├── escalations.py        chats that need a person: record, contact capture, alerts, retries
 │   ├── llm_health.py         emails / texts the operator when model calls start failing
-│   ├── leasing.py            business types, question catalog, config validation, Fair Housing guardrails
-│   ├── lead_flow.py          deterministic intake, booking step, alerts, partial-lead sweep, reminders
-│   ├── scheduling.py         availability, reply parsing (EN/ES), booking, cancel, .ics, after-hours
+│   ├── guard.py              prompt-injection checks on input and output
+│   ├── escalations.py        chats that need a person: record, contact capture, alerts, retries
+│   ├── contact.py            reads an email or phone number out of text (no model)
+│   ├── knowledge_base.py     tenant-scoped knowledge base
 │   ├── i18n.py               English and Spanish for every fixed reply, language detection
-│   ├── insights.py           data-only owner insights
-│   ├── leads.py              leads, CSV export, database-side analytics counts
-│   ├── retention.py          12 / 24 month retention
+│   ├── retention.py          12 month retention
 │   ├── client_guard.py       usage + billing gate before any model call
 │   ├── billing_policies.py   plans, trial, entitlement, branding rule
 │   ├── notifier.py           email (any SMTP provider) and SMS
-│   ├── knowledge_base.py     tenant-scoped knowledge base
-│   └── ...                   auth, CSRF, rate limits, models, security headers
+│   └── ...                   accounts, auth, CSRF, rate limits, models, security headers
 ├── routes/
 │   ├── widget.py             embeddable widget, allowed websites, rate limits
 │   └── billing.py            Stripe Checkout, Customer Portal, webhooks
-├── migrations/versions/      Alembic 0001 to 0009 (Alembic is the schema authority)
-├── scripts/                  cron jobs and one-off tools (sweep, usage reset, retention,
+├── migrations/versions/      Alembic 0001 to 0010 (Alembic is the schema authority)
+├── scripts/                  cron jobs and one-off tools (alert retries, usage reset, retention,
 │                             demo account, billing reconcile, admin password hash)
-├── templates/                landing, portal, admin, auth and appointment pages
-├── tests/                    13 offline suites + 3 live-model checks
+├── templates/                landing, portal, admin and auth pages
+├── tests/                    10 offline suites + 4 live-model suites
 └── docs/
     ├── LAUNCH_CHECKLIST.md   Railway, Stripe, email, cron and smoke-test steps
     └── BILLING_PROTECTION.md AI cost safety layers
@@ -194,62 +170,64 @@ The app runs `alembic upgrade head` on startup. `python scripts/create_demo_clie
 ### Tests
 
 ```bash
-python tests/test_general_escalations.py  # general accounts, contact capture, fail-safe escalation, portal API
-python tests/test_leasing_mvp.py          # billing, intake, Fair Housing guardrails, alerts
-python tests/test_scheduler.py            # booking, cancel, reminders, widget CORS
+python tests/test_injection.py            # prompt-injection defenses (offline)
+python tests/test_escalations.py          # needs a person: contact capture, fail-safe routing, alerts, portal API
+python tests/test_billing.py              # trial, Stripe, usage gate, rate limits
 python tests/test_portal_isolation.py     # tenant isolation + CSRF
 python tests/test_launch_fixes.py         # usage per conversation, trial resets, key + login hardening
-python tests/test_rental_focus.py         # leasing mode prompts, analytics, tiers, demo, migration 0007
-python tests/test_market_features.py      # residents, after hours, Spanish, multiple properties
 python tests/test_account_emails.py       # SMTP provider, forgot password, usage warnings
 python tests/test_retention.py            # retention + database-side counts
-python tests/test_insights.py             # data-only insights, minimum samples, masking
 python tests/test_llm_health.py           # operator alert when model calls fail, recovery notice
 python tests/test_conversation_ownership.py
 python tests/test_orchestrator.py
 ```
 
-Each suite prints `ALL PASSED`. They run on in-memory SQLite, with the model, email, SMS and Stripe stubbed, so no keys are needed. To run the database-heavy suites against real Postgres, point `MAGNI_TEST_DATABASE_URL` at an empty database that has had `alembic upgrade head`. `test_triage_agent.py`, `test_resolver_agent.py` and `test_escalation_agent.py` call the real Claude API and need `ANTHROPIC_API_KEY`.
+Each suite prints `ALL PASSED`. They run on in-memory SQLite, with the model, email, SMS and Stripe stubbed, so no keys are needed. To run the database-heavy suites against real Postgres, point `MAGNI_TEST_DATABASE_URL` at an empty database that has had `alembic upgrade head`.
+
+With `ANTHROPIC_API_KEY` set, `python tests/test_injection_live.py` runs the attack corpus against the real model, and `test_triage_agent.py`, `test_resolver_agent.py` and `test_escalation_agent.py` check each agent.
 
 ### Deploy
 
-Follow `docs/LAUNCH_CHECKLIST.md`. It covers the Railway web service and the cron services (lead sweep, monthly usage reset, demo reset, retention), the environment variables, Stripe products and webhooks, the email provider with SPF / DKIM / DMARC, and a step-by-step smoke test.
+Follow `docs/LAUNCH_CHECKLIST.md`. It covers the Railway web service and the cron services (alert retries, monthly usage reset, demo reset, retention), the environment variables, Stripe products and webhooks, the email provider with SPF / DKIM / DMARC, and a step-by-step smoke test.
 
 ---
 
 ## Engineering decisions
 
-**Deterministic flow, narrow model jobs.** The model classifies, extracts and phrases. Code decides what to ask, when to book and who to alert. *Why:* the parts that carry legal and business risk should behave the same way every time, and be testable.
+**One general assistant, no verticals.** An earlier version carried a rental leasing mode with its own intake, scheduler and compliance rules. It was removed. *Why:* the knowledge base already makes each assistant specific to its business, and every branch through the pipeline was another place for the product to behave differently than its owner expected.
 
-**Tenant + resource ownership everywhere.** Records are addressed by the owning tenant together with their id, never by id alone. *Why:* a globally unique id is not authorization.
+**Deterministic flow, narrow model jobs.** The model classifies and phrases. Code decides who to alert, what to ask and what may reach the visitor. *Why:* the parts that carry business risk should behave the same way every time, and be testable.
+
+**Limit the blast radius before filtering.** No tools, one tenant's public content per prompt, visitor text never in a system prompt. *Why:* a filter can be bypassed; a capability that doesn't exist can't be abused.
 
 **Fail safe on people.** A chat that needs a person is saved before anything is sent, fixed patterns catch the clearest cases without the model, and a model failure hands the chat to the team. *Why:* a missed handoff is the one failure a customer service product can't have.
 
 **Fail closed on money.** The usage gate locks the tenant's row, counts before the model is called, and blocks on any error. *Why:* a bug should cost a missed reply, not an unbounded bill.
 
-**Never hold a database transaction across a model call.** Leads are loaded, detached, worked on, and saved in short transactions. *Why:* a slow model response must not hold locks or exhaust the connection pool.
+**Tenant + resource ownership everywhere.** Records are addressed by the owning tenant together with their id, never by id alone. *Why:* a globally unique id is not authorization.
 
-**Insights are counted, not generated.** *Why:* an owner acting on a suggestion needs to trust that it reflects their data, so every suggestion carries its numbers.
+**Never hold a database transaction across a model call.** *Why:* a slow model response must not hold locks or exhaust the connection pool.
 
 **Explicit migrations.** Every schema change is a numbered Alembic migration. *Why:* production databases need reproducible changes.
 
-**Single process, honest about it.** Rate limits, the login lockout and the global cap live in one gunicorn worker's memory, so production runs one replica. *Why:* that's right for this scale. Redis comes in only when horizontal scaling does.
+**Single process, honest about it.** Rate limits, the login lockout, the global cap and the model-failure counter live in one gunicorn worker's memory, so production runs one replica. *Why:* that's right for this scale. Redis comes in only when horizontal scaling does.
 
 ---
 
 ## Status and what's next
 
-**Built:** self-serve signup with a 14-day trial and Stripe billing, the portal, the embeddable widget, general customer service answers for any business, the "needs a person" handoff with contact capture and retries, the rental intake with instant alerts, partial-lead capture, the built-in scheduler, the resident path, Spanish, multiple properties, after-hours tags, Insights, forgot password, usage warnings, data retention, and the landing page with a live demo.
+**Built:** self-serve signup with a 14-day trial and Stripe billing, the portal, the embeddable widget, knowledge-base answers for any business, the "needs a person" handoff with contact capture and retries, the prompt-injection guard and its test suites, operator alerts on model failures, Spanish for fixed replies, forgot password, usage warnings, data retention, and the landing page with a live demo.
 
 **Next:**
+- A live run of the injection suite against the real model
+- Widget polish: a chat that survives a page change, mobile layout
 - Railway deploy and live smoke test
 - Transactional email provider on a verified domain
 - Twilio A2P 10DLC registration for SMS
-- Widget polish (chat that survives a page change, mobile layout), and a prompt-injection test suite
-- Terms of service and privacy policy, and attorney review of the leasing question set
+- Terms of service and privacy policy
 - The first paying customer
 
-**Later, as real usage shows the need:** CRM and calendar connectors (Google, Outlook), semantic retrieval for large knowledge bases, shared rate limits for multiple instances, and an evaluation suite that measures routing and grounding quality over time.
+**Later, as real usage shows the need:** industry profiles for higher plans (for example a legal or medical practice, each with its own guardrails), customer insight analytics from chat topics, knowledge base import from a URL or file, semantic retrieval for large knowledge bases, a backup model provider, and shared rate limits for multiple instances.
 
 ---
 
@@ -257,7 +235,7 @@ Follow `docs/LAUNCH_CHECKLIST.md`. It covers the Railway web service and the cro
 
 Magni was built end to end as a solo project. AI coding agents were used as development tools, while product direction, architecture, security boundaries and validation stayed under my direction.
 
-The project goes deliberately past a chatbot demo, into the problems that show up when an LLM becomes part of a real SaaS product. How should tenant identity flow through AI workflows? How do you make sure a customer who needs a person always reaches one? How do you keep a model inside legal guardrails like Fair Housing? How do you bound AI cost? How do you test AI behavior and authorization boundaries instead of trusting a demo?
+The project goes deliberately past a chatbot demo, into the problems that show up when an LLM becomes part of a real SaaS product. How should tenant identity flow through AI workflows? How do you make sure a customer who needs a person always reaches one? What can a prompt injection actually reach, and how do you test that? How do you bound AI cost? How do you test AI behavior and authorization boundaries instead of trusting a demo?
 
 ---
 

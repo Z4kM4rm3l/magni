@@ -58,9 +58,7 @@
     <nav class="jump">
       <a href="#billing">Plan</a>
       <a href="#escalations">Needs a person</a>
-      <a href="#appointments" class="rental-only" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>Appointments</a>
-      <a href="#leads" class="rental-only" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>Leads</a>
-      <a href="#leasing">Business type and alerts</a>
+      <a href="#alerts">Alerts</a>
       <a href="#install">Install</a>
       <a href="#kb">Knowledge base</a>
       <a href="#settings">Appearance</a>
@@ -115,96 +113,23 @@
 
     <div class="card" id="escalations">
       <h2>Needs a person</h2>
-      <p>Chats your assistant handed to you: the visitor asked for a person, raised a complaint, or needed something only your team can do. Each one is emailed to you the moment it happens, and it stays here even if an email doesn't arrive. This list refreshes on its own.</p>
+      <p>Chats your assistant handed to you: the visitor asked for a person, raised a complaint, or needed something only your team can do. Each one is emailed to you the moment it happens, and it stays here even if an email doesn't arrive. This list refreshes on its own. Chat transcripts are kept for 12 months, then deleted automatically.</p>
       <div id="escList" class="lead-list"><div class="empty">Loading...</div></div>
     </div>
 
-    <div class="card rental-only" id="leads" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>
-      <div class="row" style="justify-content:space-between">
-        <h2 style="margin:0">Leads</h2>
-        <a class="btn-ghost" href="/api/portal/leads.csv">Export CSV</a>
-      </div>
-      <p style="margin-top:0.4rem">Prospects your assistant talked to. New leads are emailed (and texted, if you add a phone below) the moment they come in. This list refreshes on its own.</p>
-      <p class="q-text" style="margin:0 0 0.6rem">Leads that come in outside your weekly hours (set under Online booking) are tagged <b>After hours</b>. Prospects who chat in Spanish get the same questions in Spanish and are tagged <b>Spanish</b>. Chat transcripts are kept for 12 months and leads and appointments for 24 months, then deleted automatically, so export your leads to CSV if you need them longer.</p>
-      <div id="leadList" class="lead-list"><div class="empty">Loading...</div></div>
-    </div>
-
-    <div class="card rental-only" id="appointments" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>
-      <h2>Appointments</h2>
-      <p>Tours and calls booked through your assistant. Each prospect gets a confirmation with a calendar invite and a reminder the day before.</p>
-      <div id="apptList" class="lead-list"><div class="empty">Loading...</div></div>
-    </div>
-
-    <div class="card" id="leasing">
-      <h2>Business type and alerts</h2>
-      <p>Your assistant answers customer questions for any kind of business. If you rent out homes or vacation stays, pick a rental type to also pre-qualify renters or guests, capture leads and book tours.</p>
+    <div class="card" id="alerts">
+      <h2>Alerts</h2>
+      <p>Where "needs a person" alerts go. Leave the email blank to use your account email ({{ client.email }}).</p>
       <div class="kb-form">
-        <label class="fld">Business type
-          <select id="lsVertical" onchange="renderLeasing()">
-            {% for k, label in verticals.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}
-          </select>
-        </label>
-        <div id="lsRental" style="display:none">
-          <div class="fld">Questions to ask (fixed wording, same order for every prospect)</div>
-          <div id="lsQuestions" class="q-list"></div>
-          <label class="fld lt-only">Posted rental criteria (optional, shown to everyone who's asked)
-            <textarea id="lsCriteria" rows="2" maxlength="600" placeholder="e.g. Gross income of 3x the monthly rent, no evictions in the past 5 years, $50 application fee."></textarea>
-          </label>
-          <label class="fld">Application or booking link (optional)
-            <input id="lsApp" type="url" placeholder="https://...">
-          </label>
-          <label class="fld">Your properties, one per line (optional)
-            <textarea id="lsProps" rows="3" placeholder="Palm Court Apartments&#10;Bayview Townhomes&#10;12 Ocean Dr (3BR house)"></textarea>
-            <span class="q-text">Prospects pick from this list when asked which property they want, so every lead names a property you recognize. Up to 50.</span>
-          </label>
-          <label class="fld">For current residents (optional)
-            <textarea id="lsResident" rows="2" maxlength="300" placeholder="e.g. Call the office at (239) 555-0100, or request maintenance at https://..."></textarea>
-            <span class="q-text">When a current resident asks about rent, repairs or their lease, your assistant shares this. Residents are never counted as leads.</span>
-          </label>
-          <div class="fld" style="margin-top:0.6rem">Online booking</div>
-          <label class="q-item"><input type="checkbox" id="schEnabled" onchange="toggleSchedule()">
-            <span><span>Let prospects book a time right in the chat</span><br><span class="q-text">Your assistant offers real open times from the hours below and books them. Prospects get a confirmation, a calendar invite, and a reminder.</span></span></label>
-          <div id="schFields" style="display:none">
-            <div class="sch-grid">
-              <label class="fld">Time zone<select id="schTz">
-                <option value="America/New_York">Eastern</option><option value="America/Chicago">Central</option>
-                <option value="America/Denver">Mountain</option><option value="America/Phoenix">Arizona</option>
-                <option value="America/Los_Angeles">Pacific</option><option value="America/Anchorage">Alaska</option>
-                <option value="Pacific/Honolulu">Hawaii</option></select></label>
-              <label class="fld">Appointment length<select id="schSlot">
-                <option value="15">15 minutes</option><option value="20">20 minutes</option><option value="30">30 minutes</option>
-                <option value="45">45 minutes</option><option value="60">1 hour</option></select></label>
-              <label class="fld">Minimum notice<select id="schNotice">
-                <option value="0">None</option><option value="1">1 hour</option><option value="2">2 hours</option>
-                <option value="4">4 hours</option><option value="12">12 hours</option><option value="24">1 day</option><option value="48">2 days</option></select></label>
-              <label class="fld">Book up to<select id="schAhead">
-                <option value="7">1 week ahead</option><option value="14">2 weeks ahead</option>
-                <option value="30">30 days ahead</option><option value="60">60 days ahead</option></select></label>
-            </div>
-            <div class="fld">Weekly hours</div>
-            <div id="schHours" class="q-list"></div>
-            <label class="fld">Days off (YYYY-MM-DD, comma-separated)
-              <input id="schBlocked" type="text" placeholder="2026-11-26, 2026-12-25">
-            </label>
-            <label class="fld">Where to meet / how it works (included in confirmations)
-              <textarea id="schDetails" rows="2" maxlength="300" placeholder="e.g. Meet us at the leasing office, 123 Palm St. Bring a photo ID."></textarea>
-            </label>
-          </div>
-          <label class="fld" id="lsBookWrap">Tour / call scheduling link (optional, e.g. Calendly)
-            <input id="lsBook" type="url" placeholder="https://...">
-          </label>
-          <p class="fine">Built with Fair Housing in mind: questions use fixed wording and are asked the same way to everyone, the assistant only collects answers (it never screens, scores, or turns anyone away), assistance-animal and accommodation requests are flagged for you personally, and replies that describe who a home "suits" are blocked. This isn't legal advice, so have your own counsel review your criteria.</p>
-        </div>
         <label class="fld">Send alerts to this email
-          <input id="lsEmail" type="email" placeholder="">
-          <span class="q-text">Where "needs a person" alerts (and leads, for rentals) go. Leave blank to use your account email.</span>
+          <input id="alEmail" type="email" value="{{ client.notify_email }}" placeholder="{{ client.email }}">
         </label>
         <label class="fld">Also text alerts to (US mobile, optional)
-          <input id="lsPhone" type="tel" placeholder="(239) 555-0123">
+          <input id="alPhone" type="tel" value="{{ client.notify_phone }}" placeholder="(239) 555-0123">
         </label>
         <div class="row">
-          <button class="btn-primary" onclick="saveLeasing(this)">Save</button>
-          <span id="lsStatus" class="set-status"></span>
+          <button class="btn-primary" onclick="saveAlerts(this)">Save alerts</button>
+          <span id="alStatus" class="set-status"></span>
         </div>
       </div>
     </div>
@@ -235,17 +160,6 @@
       <h2>Analytics</h2>
       <p>How your assistant is performing this month.</p>
       <div class="kpis" id="kpis">Loading...</div>
-    </div>
-
-    <div class="card rental-only" id="insights" {{ '' if client.vertical in ['long_term','seasonal'] else 'style=display:none' }}>
-      <div class="row" style="justify-content:space-between">
-        <h2 style="margin:0">Insights</h2>
-        <select id="insDays" onchange="loadInsights()" style="width:auto">
-          <option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option>
-        </select>
-      </div>
-      <p>Counted from your own chats, leads and tours. Suggestions only appear when there's enough data behind them, and each one shows the numbers it's based on.</p>
-      <div id="insBody"><div class="empty">Loading...</div></div>
     </div>
 
     <div class="card" id="kb">
@@ -384,64 +298,13 @@
         const res = await fetch('/api/portal/analytics');
         if (!res.ok) throw new Error('bad status');
         const d = await res.json();
-        document.getElementById('kpis').innerHTML = d.rental
-          ? kpi('Conversations (30d)', d.conversations) +
-            kpi('Leads (30d)', d.leads_complete + d.leads_partial) +
-            kpi('After hours', d.leads_after_hours) +
-            kpi('Tours booked', d.tours_booked) +
-            kpi('Upcoming tours', d.tours_upcoming) +
-            kpi('Needed a person (30d)', d.escalations)
-          : kpi('Conversations (30d)', d.conversations) +
-            kpi('Answered by your assistant', d.conversations ? Math.max(0, Math.round(100 * (d.conversations - d.escalations) / d.conversations)) + '%' : 'n/a') +
-            kpi('Needed a person (30d)', d.escalations) +
-            kpi('Left contact details', d.escalations_with_contact) +
-            kpi('Waiting on you', d.escalations_waiting);
+        document.getElementById('kpis').innerHTML =
+          kpi('Conversations (30d)', d.conversations) +
+          kpi('Answered by your assistant', d.conversations ? Math.max(0, Math.round(100 * (d.conversations - d.escalations) / d.conversations)) + '%' : 'n/a') +
+          kpi('Needed a person (30d)', d.escalations) +
+          kpi('Left contact details', d.escalations_with_contact) +
+          kpi('Waiting on you', d.escalations_waiting);
       } catch (e) { document.getElementById('kpis').textContent = 'Could not load analytics.'; }
-    }
-
-    // ── Insights ──────────────────────────────────────────────────────────
-    function bars(rows, total) {
-      const max = Math.max(1, ...rows.map(r => r.count));
-      return rows.map(r => `<div class="bar-row"><div class="bar-lbl">${esc(r.label)}</div>
-        <div style="flex:1"><div class="bar" style="width:${Math.round(100 * r.count / max)}%"></div></div>
-        <div class="bar-n">${r.count}${total && r.count <= total ? ' (' + Math.round(100 * r.count / total) + '%)' : ''}</div></div>`).join('');
-    }
-    function hour12(h) { return h == null ? '' : ((h % 12) || 12) + (h < 12 ? ' AM' : ' PM'); }
-    function quotes(xs) { return (xs || []).map(q => `<div class="quote">"${esc(q)}"</div>`).join(''); }
-    function topicList(topics, emptyText) {
-      if (!topics.length) return `<div class="empty">${emptyText}</div>`;
-      return topics.slice(0, 6).map(t => `<div class="sugg" style="border-left-color:var(--border)">
-        <div class="sugg-t">${esc(t.label)} <span class="badge">${t.count}</span></div>${quotes(t.examples)}</div>`).join('');
-    }
-    async function loadInsights() {
-      const box = document.getElementById('insBody');
-      try {
-        const r = await fetch('/api/portal/insights?days=' + document.getElementById('insDays').value);
-        if (!r.ok) throw new Error('bad status');
-        const d = await r.json();
-        const sugg = d.suggestions.length ? d.suggestions.map(s => `<div class="sugg"><div class="sugg-t">${esc(s.title)}</div>
-            <div class="sugg-d">${esc(s.detail)}</div>${quotes(s.examples)}<div class="sugg-b">Based on: ${esc(s.basis)}</div></div>`).join('')
-          : '<div class="empty">No suggestions yet. They appear once there\'s enough activity to back them up.</div>';
-        const chats = d.funnel[0].count;
-        const props = d.properties.length ? `<table class="ins-table"><tr><th>Property</th><th>Leads</th><th>Answered every question</th><th>Tours</th></tr>
-            ${d.properties.map(p => `<tr><td>${esc(p.name)}</td><td>${p.leads}</td><td>${p.finished}</td><td>${p.tours}</td></tr>`).join('')}</table>`
-          : '<div class="empty">No property names on leads yet. List your properties under Leasing assistant so prospects can pick one.</div>';
-        const t = d.timing;
-        const timing = t.busiest_day ? `<div class="sugg-d">Busiest day: <b>${esc(t.busiest_day)}</b>. Busiest hour: <b>${hour12(t.busiest_hour)}</b>. After hours: <b>${t.after_hours}</b> (${t.after_hours_share}%). In Spanish: <b>${t.spanish}</b> (${t.spanish_share}%).</div>
-            ${bars(t.by_day.map(x => ({label: x.day, count: x.count})))}` : '<div class="empty">No leads in this period yet.</div>';
-        box.innerHTML =
-          `<div class="ins-h">Suggestions</div>${sugg}` +
-          `<div class="ins-h">From chat to tour</div>${bars(d.funnel, chats)}` +
-          (d.tours_canceled ? `<div class="sugg-b">${d.tours_canceled} booked tour(s) were later canceled.</div>` : '') +
-          `<div class="ins-h">Where prospects stop</div>` + (d.drop_off.length ? bars(d.drop_off.slice(0, 5)) : '<div class="empty">No unfinished intakes in this period.</div>') +
-          `<div class="ins-h">Questions your assistant couldn't answer (${d.unanswered.total})</div>` +
-          topicList(d.unanswered.topics, 'None. Your knowledge base covered every question.') +
-          (d.unanswered.other_examples.length ? `<div class="sugg-b">Other questions:</div>${quotes(d.unanswered.other_examples)}` : '') +
-          `<div class="ins-h">What prospects ask about</div>${topicList(d.prospect_topics, 'No prospect questions in this period.')}` +
-          `<div class="ins-h">What current residents raise (${d.resident.chats} chats)</div>${topicList(d.resident.topics, 'No resident chats in this period.')}` +
-          `<div class="ins-h">By property</div>${props}` +
-          `<div class="ins-h">When leads come in</div>${timing}`;
-      } catch (e) { box.innerHTML = '<div class="empty">Could not load insights.</div>'; }
     }
 
     async function loadArticles() {
@@ -538,176 +401,19 @@
     function startCheckout(plan, btn) { postForUrl('/api/portal/billing/checkout', { plan }, btn); }
     function manageBilling(btn) { postForUrl('/api/portal/billing/manage', {}, btn); }
 
-    // ── Leasing assistant settings ─────────────────────────────────────────
-    let leasing = null;
-    const RENTAL = ['long_term', 'seasonal'];
-
-    async function loadLeasing() {
-      try {
-        const r = await fetch('/api/portal/leasing');
-        if (!r.ok) throw new Error('bad status');
-        leasing = await r.json();
-        document.getElementById('lsVertical').value = leasing.vertical;
-        const c = leasing.config || {};
-        document.getElementById('lsCriteria').value = c.rental_criteria || '';
-        document.getElementById('lsApp').value = c.application_url || '';
-        document.getElementById('lsProps').value = (c.properties || []).join('\n');
-        document.getElementById('lsResident').value = c.resident_contact || '';
-        document.getElementById('lsBook').value = c.booking_url || '';
-        document.getElementById('lsEmail').value = c.notify_email || '';
-        document.getElementById('lsEmail').placeholder = leasing.account_email || '';
-        document.getElementById('lsPhone').value = c.notify_phone || '';
-        fillSchedule(c.schedule || {});
-        renderLeasing(true);
-      } catch (e) { document.getElementById('lsStatus').textContent = 'Could not load these settings.'; }
-    }
-
-    const PRESETS = {
-      long_term: ['property','move_in','name','phone','email','occupants','lease_length','budget','pets','criteria','tour_time'],
-      seasonal: ['property','stay_dates','name','phone','email','guests','stay_budget','pets','tour_time'],
-    };
-
-    function renderLeasing(fromSaved) {
-      const v = document.getElementById('lsVertical').value;
-      const rental = RENTAL.includes(v);
-      document.getElementById('lsRental').style.display = rental ? 'block' : 'none';
-      document.querySelectorAll('.rental-only').forEach(el => el.style.display = rental ? '' : 'none');
-      document.querySelectorAll('.lt-only').forEach(el => el.style.display = v === 'long_term' ? 'block' : 'none');
-      renderSuggestions(v);
-      if (!rental || !leasing) return;
-      const saved = (fromSaved && leasing.vertical === v) ? (leasing.config.questions || []) : null;
-      const enabled = new Set(saved || PRESETS[v]);
-      document.getElementById('lsQuestions').innerHTML = (leasing.catalog[v] || []).map(q => {
-        const locked = q.key === 'name';
-        return `<label class="q-item"><input type="checkbox" data-q="${q.key}" ${enabled.has(q.key) ? 'checked' : ''} ${locked ? 'disabled' : ''}>
-          <span><span>${esc(q.label)}${locked ? ' (always asked)' : ''}${q.needs_criteria ? ' (needs posted criteria)' : ''}</span><br><span class="q-text">"${esc(q.text.replace('{criteria}', '[your posted criteria]'))}"</span></span></label>`;
-      }).join('');
-      toggleSchedule();
-    }
-
-    async function saveLeasing(btn) {
-      const v = document.getElementById('lsVertical').value;
-      const status = document.getElementById('lsStatus');
-      const body = { vertical: v };
-      if (!RENTAL.includes(v)) {
-        // General accounts have no intake questions. Keep everything else that
-        // was saved (so switching back to a rental type loses nothing).
-        body.config = Object.assign({}, (leasing && leasing.config) || {}, {
-          questions: [],
-          notify_email: document.getElementById('lsEmail').value.trim(),
-          notify_phone: document.getElementById('lsPhone').value.trim(),
-        });
-      } else {
-        const qs = Array.from(document.querySelectorAll('#lsQuestions input[data-q]')).filter(i => i.checked || i.disabled).map(i => i.dataset.q);
-        body.config = {
-          questions: qs,
-          rental_criteria: v === 'long_term' ? document.getElementById('lsCriteria').value : '',
-          application_url: document.getElementById('lsApp').value.trim(),
-          properties: document.getElementById('lsProps').value.split('\n').map(s => s.trim()).filter(Boolean),
-          resident_contact: document.getElementById('lsResident').value.trim(),
-          booking_url: document.getElementById('lsBook').value.trim(),
-          notify_email: document.getElementById('lsEmail').value.trim(),
-          notify_phone: document.getElementById('lsPhone').value.trim(),
-          schedule: readSchedule(),
-        };
-      }
+    // ── Alerts ─────────────────────────────────────────────────────────────
+    async function saveAlerts(btn) {
+      const status = document.getElementById('alStatus');
       btn.disabled = true; status.textContent = 'Saving...';
       try {
-        const r = await fetch('/api/portal/leasing', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const r = await fetch('/api/portal/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notify_email: document.getElementById('alEmail').value.trim(), notify_phone: document.getElementById('alPhone').value.trim() }) });
         const d = await r.json().catch(() => ({}));
-        if (r.ok) {
-          leasing.vertical = d.vertical; leasing.config = d.config || leasing.config;
-          status.textContent = 'Saved.';
-          if (d.config) { document.getElementById('lsPhone').value = d.config.notify_phone || ''; fillSchedule(d.config.schedule || {}); }
-          loadAnalytics();
-          if (RENTAL.includes(v)) { loadLeads(); loadAppointments(); loadInsights(); }
-        } else { status.textContent = d.error || 'Could not save.'; }
+        if (r.ok) { status.textContent = 'Saved.'; document.getElementById('alPhone').value = (d.client || {}).notify_phone || ''; }
+        else { status.textContent = d.error || 'Could not save.'; }
       } catch (e) { status.textContent = 'Network error.'; }
       btn.disabled = false;
       setTimeout(() => { status.textContent = ''; }, 4000);
-    }
-
-    // ── Online booking ─────────────────────────────────────────────────────
-    const DAYS = [['mon','Monday'],['tue','Tuesday'],['wed','Wednesday'],['thu','Thursday'],['fri','Friday'],['sat','Saturday'],['sun','Sunday']];
-    function fillSchedule(s) {
-      document.getElementById('schEnabled').checked = !!s.enabled;
-      document.getElementById('schTz').value = s.timezone || 'America/New_York';
-      document.getElementById('schSlot').value = String(s.slot_minutes || 30);
-      document.getElementById('schNotice').value = String(s.min_notice_hours != null ? s.min_notice_hours : 2);
-      document.getElementById('schAhead').value = String(s.max_days_ahead || 14);
-      document.getElementById('schBlocked').value = (s.blocked_dates || []).join(', ');
-      document.getElementById('schDetails').value = s.details || '';
-      const hours = s.hours || {};
-      document.getElementById('schHours').innerHTML = DAYS.map(([k, label]) => {
-        const w = hours[k];
-        return `<div class="day-row"><label class="day-name"><input type="checkbox" data-day="${k}" ${w ? 'checked' : ''} onchange="dayToggle('${k}')"> ${label}</label>
-          <input type="time" id="from-${k}" value="${w ? w[0] : '09:00'}" ${w ? '' : 'disabled'}> to
-          <input type="time" id="to-${k}" value="${w ? w[1] : '17:00'}" ${w ? '' : 'disabled'}></div>`;
-      }).join('');
-      toggleSchedule();
-    }
-    function dayToggle(k) {
-      const on = document.querySelector(`#schHours input[data-day="${k}"]`).checked;
-      document.getElementById('from-' + k).disabled = !on;
-      document.getElementById('to-' + k).disabled = !on;
-    }
-    function toggleSchedule() {
-      const on = document.getElementById('schEnabled').checked;
-      document.getElementById('schFields').style.display = on ? 'block' : 'none';
-      document.getElementById('lsBookWrap').style.display = on ? 'none' : 'block';
-      // Online booking replaces the free-text "preferred time" question.
-      const tq = document.querySelector('#lsQuestions input[data-q="tour_time"]');
-      if (tq) tq.closest('.q-item').style.display = on ? 'none' : '';
-    }
-    function readSchedule() {
-      const hours = {};
-      DAYS.forEach(([k]) => {
-        const on = document.querySelector(`#schHours input[data-day="${k}"]`).checked;
-        hours[k] = on ? [document.getElementById('from-' + k).value, document.getElementById('to-' + k).value] : null;
-      });
-      return {
-        enabled: document.getElementById('schEnabled').checked,
-        timezone: document.getElementById('schTz').value,
-        slot_minutes: parseInt(document.getElementById('schSlot').value, 10),
-        min_notice_hours: parseInt(document.getElementById('schNotice').value, 10),
-        max_days_ahead: parseInt(document.getElementById('schAhead').value, 10),
-        hours,
-        blocked_dates: document.getElementById('schBlocked').value,
-        details: document.getElementById('schDetails').value,
-      };
-    }
-
-    async function loadAppointments() {
-      const list = document.getElementById('apptList');
-      try {
-        const r = await fetch('/api/portal/appointments');
-        if (!r.ok) throw new Error('bad status');
-        const d = await r.json();
-        const appts = d.appointments || [];
-        if (!appts.length) {
-          list.innerHTML = '<div class="empty">' + (d.enabled ? 'No appointments yet. They\'ll show up here as prospects book.' : 'Turn on online booking in the Leasing assistant settings below to let prospects book in the chat.') + '</div>';
-          return;
-        }
-        const now = Date.now();
-        list.innerHTML = appts.map(a => {
-          const past = new Date(a.end_at).getTime() < now;
-          const cls = a.status === 'canceled' ? 'canceled' : (past ? 'past' : '');
-          const tag = a.status === 'canceled' ? `<span class="badge">Canceled${a.canceled_by ? ' by ' + (a.canceled_by === 'owner' ? 'you' : 'prospect') : ''}</span>` : (past ? '<span class="badge">Past</span>' : '<span class="badge hot">Booked</span>');
-          const contact = [a.phone, a.email].filter(Boolean).map(esc).join(' · ');
-          const btn = a.status === 'booked' && !past ? `<button class="btn-ghost danger" onclick="cancelAppt('${a.id}', this)">Cancel</button>` : '';
-          return `<div class="appt ${cls}"><div><div class="appt-when">${esc(a.when)}${tag}</div>
-            <div class="lead-sub">${esc(a.name || 'Prospect')}${contact ? ' · ' + contact : ''}${a.property ? ' · ' + esc(a.property) : ''}</div></div>${btn}</div>`;
-        }).join('');
-      } catch (e) { list.innerHTML = '<div class="empty">Could not load appointments.</div>'; }
-    }
-    async function cancelAppt(id, btn) {
-      if (!confirm('Cancel this appointment? The prospect will get an email.')) return;
-      btn.disabled = true;
-      try {
-        const r = await fetch('/api/portal/appointments/' + id + '/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-        if (!r.ok) { const e = await r.json().catch(() => ({})); alert(e.error || 'Could not cancel.'); btn.disabled = false; return; }
-        loadAppointments(); loadLeads();
-      } catch (e) { alert('Network error.'); btn.disabled = false; }
     }
 
     // ── Needs a person ─────────────────────────────────────────────────────
@@ -745,95 +451,36 @@
         if (!r.ok) alert('Could not update this chat.'); else { loadEscalations(); loadAnalytics(); } } catch (e) { alert('Network error.'); }
     }
 
-    // ── Leads ──────────────────────────────────────────────────────────────
-    const openLeads = new Set();
     function fmtTime(iso) { if (!iso) return ''; const d = new Date(iso); return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
-
-    async function loadLeads() {
-      const list = document.getElementById('leadList');
-      try {
-        const r = await fetch('/api/portal/leads');
-        if (!r.ok) throw new Error('bad status');
-        const leads = (await r.json()).leads || [];
-        if (!leads.length) { list.innerHTML = '<div class="empty">No leads yet. They\'ll show up here as soon as prospects start chatting.</div>'; return; }
-        list.innerHTML = leads.map(l => {
-          const prop = (l.summary.find(x => x.label === 'Property / unit') || {}).value || '';
-          const stateBadge = l.status === 'complete' ? '<span class="badge hot">Complete</span>'
-            : l.status === 'abandoned' ? '<span class="badge">Stopped early</span>' : '<span class="badge">In progress</span>';
-          const flag = (l.flags.accommodation_request ? '<span class="badge flag">Accommodation request</span>' : '')
-            + (l.flags.after_hours ? '<span class="badge">After hours</span>' : '')
-            + (l.flags.lang === 'es' ? '<span class="badge">Spanish</span>' : '');
-          const contact = [l.phone, l.email].filter(Boolean).map(esc).join(' · ');
-          const rows = l.summary.map(x => `<div><span class="k">${esc(x.label)}:</span> ${esc(x.value)}</div>`).join('');
-          const opts = ['new','contacted','closed'].map(s => `<option value="${s}" ${l.owner_status === s ? 'selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('');
-          return `<div class="lead ${openLeads.has(l.id) ? 'open' : ''}" id="lead-${l.id}">
-            <div class="lead-head" onclick="toggleLead('${l.id}')">
-              <div><div class="lead-name">${esc(l.name || 'Unnamed prospect')}${stateBadge}${flag}</div>
-                <div class="lead-sub">${contact || 'No contact info yet'}${prop ? ' · ' + esc(prop) : ''} · ${fmtTime(l.created_at)}</div></div>
-              <select onclick="event.stopPropagation()" onchange="setLeadStatus('${l.id}', this.value)">${opts}</select>
-            </div>
-            <div class="lead-body">${rows || '<div class="k">No answers yet.</div>'}${l.flags.accommodation_request ? '<div class="k" style="margin-top:0.4rem">Mentioned an assistance animal or accommodation need. Follow up personally; pet rules and fees don\'t apply to assistance animals.</div>' : ''}</div>
-          </div>`;
-        }).join('');
-      } catch (e) { list.innerHTML = '<div class="empty">Could not load leads.</div>'; }
-    }
-    function toggleLead(id) { const el = document.getElementById('lead-' + id); el.classList.toggle('open'); el.classList.contains('open') ? openLeads.add(id) : openLeads.delete(id); }
-    async function setLeadStatus(id, value) {
-      try { const r = await fetch('/api/portal/leads/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner_status: value }) });
-        if (!r.ok) alert('Could not update the lead.'); } catch (e) { alert('Network error.'); }
-    }
 
     // ── Suggested KB articles ──────────────────────────────────────────────
     const SUGGEST = {
-      general: {
-        'Hours and location': 'Your opening hours for each day, holiday closures, your address, and parking or directions if useful.',
-        'Products or services and pricing': 'What you offer and what it costs. List each product, service or plan with its price and what is included.',
-        'Shipping and delivery': 'Where you ship or deliver, how long it takes, what it costs, and how customers track an order.',
-        'Returns and refunds': 'Your return window, the condition items must be in, how to start a return, and when refunds are issued.',
-        'How to contact the team': 'The best phone number or email for customers, when someone answers, and how fast you usually reply.',
-        'Frequently asked questions': 'The questions you answer most often, each with its answer. One question and answer per paragraph works well.',
-      },
-      long_term: {
-        'Available units and pricing': 'List each available property or unit: address or name, beds/baths, square feet, monthly rent, deposit, and the date it is available.',
-        'Application process and fees': 'How to apply, the application fee, what documents are needed, and how long approval usually takes.',
-        'Pet policy': 'Which pets are allowed, limits, pet deposit / monthly pet rent. Note: assistance animals are not pets and are handled separately.',
-        'Showings and office hours': 'How tours work (in person, self-guided, video), the days and hours available, and how to schedule.',
-        'Lease terms': 'Lease lengths offered, move-in costs, renewal, early termination, and what utilities are included.',
-        'Parking and amenities': 'Parking, laundry, appliances, pool, gym, storage, and other features of the property.',
-      },
-      seasonal: {
-        'Properties and rates': 'Each rental: name, beds/baths, how many it sleeps, nightly/weekly/monthly rates by season, and minimum stay.',
-        'Booking and deposits': 'How to book, deposit amount, when the balance is due, and accepted payment methods.',
-        'Cancellation policy': 'Cancellation deadlines, refund amounts, and any travel-insurance options.',
-        'Check-in and check-out': 'Check-in and check-out times, how keys or codes work, and early/late options.',
-        'House rules and pets': 'Max occupancy, quiet hours, smoking, parties, and the pet policy. Assistance animals are not pets.',
-        'Amenities and what to bring': 'Wi-Fi, linens, kitchen supplies, beach gear, parking, pool, and anything guests should bring.',
-      },
+      'Hours and location': 'Your opening hours for each day, holiday closures, your address, and parking or directions if useful.',
+      'Products or services and pricing': 'What you offer and what it costs. List each product, service or plan with its price and what is included.',
+      'Shipping and delivery': 'Where you ship or deliver, how long it takes, what it costs, and how customers track an order.',
+      'Returns and refunds': 'Your return window, the condition items must be in, how to start a return, and when refunds are issued.',
+      'How to contact the team': 'The best phone number or email for customers, when someone answers, and how fast you usually reply.',
+      'Frequently asked questions': 'The questions you answer most often, each with its answer. One question and answer per paragraph works well.',
     };
-    function renderSuggestions(v) {
-      const box = document.getElementById('kbSuggest');
-      const items = SUGGEST[v];
-      if (!items) { box.innerHTML = ''; return; }
-      box.innerHTML = '<span class="lead-sub" style="align-self:center">Suggested articles:</span>' +
-        Object.keys(items).map(t => `<button class="chip" onclick="prefill(this.dataset.t)" data-t="${esc(t)}">+ ${esc(t)}</button>`).join('');
+    function renderSuggestions() {
+      document.getElementById('kbSuggest').innerHTML = '<span class="lead-sub" style="align-self:center">Suggested articles:</span>' +
+        Object.keys(SUGGEST).map(t => `<button class="chip" onclick="prefill(this.dataset.t)" data-t="${esc(t)}">+ ${esc(t)}</button>`).join('');
     }
     function prefill(title) {
-      const v = document.getElementById('lsVertical').value;
       cancelEdit();
       document.getElementById('kbTitle').value = title;
-      document.getElementById('kbCategory').value = RENTAL.includes(v) ? 'leasing' : 'general';
+      document.getElementById('kbCategory').value = 'general';
       document.getElementById('kbContent').value = '';
-      document.getElementById('kbContent').placeholder = (SUGGEST[v] || {})[title] || '';
+      document.getElementById('kbContent').placeholder = SUGGEST[title] || '';
       document.getElementById('kbContent').focus();
       document.getElementById('kbForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    const isRental = () => RENTAL.includes(document.getElementById('lsVertical').value);
     loadAnalytics();
     loadArticles();
     loadEscalations();
-    loadLeasing().then(() => { if (isRental()) { loadLeads(); loadAppointments(); loadInsights(); } });
-    setInterval(() => { loadEscalations(); if (isRental()) { loadLeads(); loadAppointments(); } }, 30000);
+    renderSuggestions();
+    setInterval(loadEscalations, 30000);
   </script>
 </body>
 </html>

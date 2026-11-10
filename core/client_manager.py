@@ -12,10 +12,31 @@ from datetime import datetime, timezone, timedelta
 from core.db import SessionLocal
 from core.models import Client
 from core.billing_policies import TIER_LIMITS, PLAN_PRICES, billing_state, trial_days_left
-from core.leasing import (normalize_lead_config, VERTICALS, DEFAULT_VERTICAL, vertical_of,
-                          DEFAULT_BOT_NAME, DEFAULT_WELCOME, RENTAL_BOT_NAME, RENTAL_WELCOME,
-                          default_identity, is_rental_vertical)
+from core.contact import is_email, normalize_phone_e164
 from core.utils import logger
+
+# What a new account's assistant is called and says first, until the owner
+# changes them under Appearance.
+DEFAULT_BOT_NAME = "Assistant"
+DEFAULT_WELCOME = "Hi! How can I help you today?"
+DEFAULT_COLOR = "#f59e0b"
+
+
+class SettingsError(ValueError):
+    pass
+
+
+def clean_alert_settings(notify_email, notify_phone) -> tuple[str, str]:
+    """Validate where "needs a person" alerts go. Blank is allowed for both
+    (blank email means the account email). Raises SettingsError on bad input."""
+    email = str(notify_email or "").strip().lower()
+    if email and not is_email(email):
+        raise SettingsError("Alert email doesn't look like a valid email address")
+    phone_raw = str(notify_phone or "").strip()
+    phone = normalize_phone_e164(phone_raw) if phone_raw else ""
+    if phone_raw and not phone:
+        raise SettingsError("Alert phone must be a 10-digit US number")
+    return email, phone or ""
 
 # Feature flags per tier — kept here for admin UI display logic.
 # The billing call-cap integers live in billing_policies.TIER_LIMITS.
@@ -54,12 +75,12 @@ def _client_to_dict(c: Client) -> dict:
         "email":              c.email or "",
         "tier":               tier,
         "status":             "active" if c.is_active else "suspended",
-        "bot_name":           c.bot_name or default_identity(c.vertical)[0],
+        "bot_name":           c.bot_name or DEFAULT_BOT_NAME,
         "api_key":            c.api_key or "",
         "notes":              c.notes or "",
         # Widget config
-        "primary_color":      c.primary_color or "#f59e0b",
-        "welcome_message":    c.welcome_message or default_identity(c.vertical)[1],
+        "primary_color":      c.primary_color or DEFAULT_COLOR,
+        "welcome_message":    c.welcome_message or DEFAULT_WELCOME,
         "allowed_domains":    c.allowed_domains or [],
         # Billing counters (kept for UI parity with old JSON shape)
         "conversation_limit": (
@@ -77,10 +98,9 @@ def _client_to_dict(c: Client) -> dict:
         "trial_days_left":     trial_days_left(c),
         "subscription_status": c.subscription_status or "",
         "has_billing_account": bool(c.stripe_customer_id),
-        # Leasing assistant
-        "vertical":            vertical_of(c.vertical),
-        "vertical_label":      VERTICALS[vertical_of(c.vertical)],
-        "lead_config":         normalize_lead_config(c.lead_config, vertical_of(c.vertical)),
+        # Where "needs a person" alerts go
+        "notify_email":        c.notify_email or "",
+        "notify_phone":        c.notify_phone or "",
         # Timestamps
         "created_at": c.created_at.timestamp() if c.created_at else None,
         "updated_at": None,  # not tracked on the SQL model; kept for shape parity
@@ -121,7 +141,6 @@ def create_client(
             monthly_used=0,
             created_at=datetime.now(timezone.utc),
             trial_ends_at=(datetime.now(timezone.utc) + timedelta(days=trial_days)) if trial_days else None,
-            vertical=DEFAULT_VERTICAL,
         )
         db.add(client)
         db.commit()
@@ -150,6 +169,36 @@ def get_client(client_id: str) -> dict | None:
     try:
         client = db.query(Client).filter(Client.id == client_id).first()
         return _client_to_dict(client) if client else None
+    finally:
+        db.close()
+
+
+def client_context(client_id: str) -> dict | None:
+    """The few facts about an account that a chat turn needs (who the assistant
+    is, where alerts go), loaded in one short read. None if the account is
+    missing or the database can't be reached; callers then carry on without it."""
+    if not client_id:
+        return None
+    try:
+        db = SessionLocal()
+    except Exception as e:
+        logger.error(f"client_context: no DB session: {e}")
+        return None
+    try:
+        c = db.get(Client, client_id)
+        if not c:
+            return None
+        return {
+            "client_id": c.id,
+            "business_name": c.business_name or "",
+            "bot_name": c.bot_name or "",
+            "email": c.email or "",
+            "notify_email": c.notify_email or "",
+            "notify_phone": c.notify_phone or "",
+        }
+    except Exception as e:
+        logger.error(f"client_context error: {e}")
+        return None
     finally:
         db.close()
 
@@ -189,19 +238,9 @@ def update_client(client_id: str, **kwargs) -> dict | None:
             "primary_color":  "primary_color",
             "welcome_message": "welcome_message",
             "allowed_domains": "allowed_domains",
-            "vertical":       "vertical",
-            "lead_config":    "lead_config",
+            "notify_email":   "notify_email",
+            "notify_phone":   "notify_phone",
         }
-        # Switching business type swaps the assistant's name and greeting to
-        # the new type's defaults, but only where the owner never customized them.
-        if "vertical" in kwargs and is_rental_vertical(kwargs["vertical"]) != is_rental_vertical(client.vertical):
-            old_name, old_welcome = default_identity(client.vertical)
-            new_name, new_welcome = default_identity(kwargs["vertical"])
-            if "bot_name" not in kwargs and (client.bot_name or old_name) == old_name:
-                client.bot_name = new_name
-            if "welcome_message" not in kwargs and (client.welcome_message or old_welcome) == old_welcome:
-                client.welcome_message = new_welcome
-
         for kwarg_key, col_name in field_map.items():
             if kwarg_key in kwargs:
                 setattr(client, col_name, kwargs[kwarg_key])

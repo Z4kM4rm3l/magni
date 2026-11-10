@@ -2,8 +2,8 @@
 """
 scripts/apply_retention.py
 
-Deletes chat transcripts older than 12 months, and leads and appointments
-older than 24 months (core/retention.py). Schedule it daily, e.g. a Railway
+Deletes chat transcripts, and the "needs a person" records that hold a copy,
+once they are older than 12 months (core/retention.py). Schedule it daily, e.g. a Railway
 cron service with `30 6 * * *` and DATABASE_URL.
 """
 import os
@@ -18,5 +18,5 @@ from core.retention import apply_retention
 
 if __name__ == "__main__":
     counts = apply_retention()
-    print(f"retention: deleted {counts['conversations']} chat(s), {counts['leads']} lead(s), "
-          f"{counts['appointments']} appointment(s)")
+    print(f"retention: deleted {counts['conversations']} chat(s) and "
+          f"{counts['escalations']} \"needs a person\" record(s)")

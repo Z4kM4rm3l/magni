@@ -1,6 +1,6 @@
 # core/models.py
 from sqlalchemy import (
-    Column, String, Integer, Boolean, DateTime, JSON, Text, ForeignKey, Index, Float, text
+    Column, String, Integer, Boolean, DateTime, JSON, Text, ForeignKey, Index, Float
 )
 from sqlalchemy.orm import relationship
 from core.db import Base
@@ -34,9 +34,10 @@ class Client(Base):
     subscription_status    = Column(String, nullable=True)  # trialing|active|past_due|canceled|unpaid|incomplete...
     billing_synced_at      = Column(DateTime(timezone=True), nullable=True)  # created-time of last applied Stripe event
 
-    # ── Vertical / leasing assistant ──────────────────────────────────────────
-    vertical    = Column(String, nullable=True, default="general")  # general|long_term|seasonal
-    lead_config = Column(JSON, nullable=True)  # validated by core.leasing.normalize_lead_config
+    # ── Owner alerts ("needs a person") ───────────────────────────────────────
+    # Where alerts go. Blank email means the account email.
+    notify_email = Column(String, nullable=True)
+    notify_phone = Column(String, nullable=True)  # +1XXXXXXXXXX, optional SMS
 
     # ── Widget config ─────────────────────────────────────────────────────────
     bot_name        = Column(String, default="Assistant")
@@ -55,18 +56,6 @@ class Client(Base):
     )
     conversations = relationship(
         "Conversation",
-        back_populates="client",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-    leads = relationship(
-        "Lead",
-        back_populates="client",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-    appointments = relationship(
-        "Appointment",
         back_populates="client",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -183,59 +172,12 @@ class Message(Base):
     conversation = relationship("Conversation", back_populates="messages")
 
 
-class Lead(Base):
-    """A prospect captured by the leasing assistant. One per (client, chat session).
-
-    The assistant only COLLECTS answers to the owner's enabled questions; it never
-    scores, ranks, or rejects anyone. The owner decides.
-    """
-    __tablename__ = "leads"
-
-    id         = Column(String, primary_key=True, index=True)  # str(uuid.uuid4())
-    client_id  = Column(
-        String,
-        ForeignKey("clients.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    session_id = Column(String, nullable=False, index=True)
-
-    # ── Flow state ────────────────────────────────────────────────────────────
-    status      = Column(String, nullable=False, default="in_progress")  # in_progress|complete|abandoned
-    pending_key = Column(String, nullable=True)   # question currently waiting for an answer
-    reask_count = Column(Integer, default=0)
-    answers     = Column(JSON, nullable=True)     # {question_key: answer}
-    flags       = Column(JSON, nullable=True)     # {"accommodation_request": true, ...}
-
-    # ── Denormalized contact (for the list view + alerts) ─────────────────────
-    contact_name  = Column(String, nullable=True)
-    contact_phone = Column(String, nullable=True)
-    contact_email = Column(String, nullable=True)
-
-    # ── Owner workflow ────────────────────────────────────────────────────────
-    owner_status = Column(String, nullable=False, default="new")  # new|contacted|closed
-    notified_at  = Column(DateTime(timezone=True), nullable=True)
-    notify_kind  = Column(String, nullable=True)  # complete|partial|accommodation
-
-    created_at   = Column(DateTime(timezone=True), nullable=True)
-    updated_at   = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-
-    client = relationship("Client", back_populates="leads")
-
-    __table_args__ = (
-        Index("ix_leads_client_created", "client_id", "created_at"),
-        Index("ix_leads_client_session", "client_id", "session_id"),
-        Index("ix_leads_created", "created_at"),  # retention
-    )
-
-
 class Escalation(Base):
     """A chat that needs a person. One active record per (client, chat session).
 
     Written before any email goes out, so a failed or unconfigured alert never
-    loses the request: the owner still sees it in the portal, and the sweep
-    retries the email. Works for every business type.
+    loses the request: the owner still sees it in the portal, and the email is
+    retried.
     """
     __tablename__ = "escalations"
 
@@ -254,7 +196,7 @@ class Escalation(Base):
     # open       = the owner needs to follow up
     # closed     = the owner marked it handled
     status       = Column(String, nullable=False, default="collecting")
-    source       = Column(String, nullable=True)   # gate|triage|resolver|intake|error
+    source       = Column(String, nullable=True)   # gate|triage|resolver|error
     action       = Column(String, nullable=True)   # collect_contact|human_handoff
     reason       = Column(Text, nullable=True)
     last_message = Column(Text, nullable=True)     # what the visitor said that triggered it
@@ -290,42 +232,3 @@ class StripeEvent(Base):
     id          = Column(String, primary_key=True)  # Stripe event id (evt_...)
     type        = Column(String, nullable=True)
     received_at = Column(DateTime(timezone=True), nullable=True)
-
-
-class Appointment(Base):
-    """A tour / call booked through the built-in scheduler."""
-    __tablename__ = "appointments"
-
-    id         = Column(String, primary_key=True, index=True)
-    client_id  = Column(String, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False, index=True)
-    lead_id    = Column(String, ForeignKey("leads.id", ondelete="SET NULL"), nullable=True, index=True)
-
-    start_at   = Column(DateTime(timezone=True), nullable=False)
-    end_at     = Column(DateTime(timezone=True), nullable=False)
-    status     = Column(String, nullable=False, default="booked")  # booked|canceled
-
-    name       = Column(String, nullable=True)
-    email      = Column(String, nullable=True)
-    phone      = Column(String, nullable=True)
-    property   = Column(String, nullable=True)
-
-    cancel_token     = Column(String, nullable=False, unique=True, index=True)
-    created_at       = Column(DateTime(timezone=True), nullable=True)
-    canceled_at      = Column(DateTime(timezone=True), nullable=True)
-    canceled_by      = Column(String, nullable=True)  # prospect|owner
-    reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
-
-    client = relationship("Client", back_populates="appointments")
-
-    __table_args__ = (
-        Index("ix_appt_client_start", "client_id", "start_at"),
-        Index("ix_appt_client_created", "client_id", "created_at"),  # analytics
-        Index("ix_appt_end", "end_at"),  # retention
-        # One booked appointment per client per slot, enforced by the database.
-        Index("uq_appt_client_slot_booked", "client_id", "start_at", unique=True,
-              postgresql_where=text("status = 'booked'"), sqlite_where=text("status = 'booked'")),
-        # And one booked appointment per prospect (double-taps, retries).
-        Index("uq_appt_lead_booked", "lead_id", unique=True,
-              postgresql_where=text("status = 'booked' AND lead_id IS NOT NULL"),
-              sqlite_where=text("status = 'booked' AND lead_id IS NOT NULL")),
-    )
