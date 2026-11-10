@@ -32,8 +32,13 @@ from core.utils import logger
 
 DEMO_CLIENT_ID = "demo"  # the landing-page demo never emails or texts anyone
 
-ACTIVE = ("collecting", "open")
-STATUSES = ("collecting", "open", "closed")
+# collecting = asked for contact details, none yet
+# confirming = the visitor gave contact details earlier in the chat; asked
+#              whether that is the best way to reach them
+# open       = the owner needs to follow up
+# closed     = the owner marked it handled
+ACTIVE = ("collecting", "confirming", "open")
+STATUSES = ("collecting", "confirming", "open", "closed")
 # After asking for contact details, how many visitor turns without any before
 # the assistant stops waiting (the owner already has the alert either way).
 MAX_ASKS = 2
@@ -107,6 +112,11 @@ _NOT_NAMES = {
 _FILLER_RE = re.compile(
     r"\b(?:my|the|best|email|e-mail|phone|number|cell|mobile|is|are|at|and|or|you|can|reach|me|call|text|"
     r"contact|it's|its|name|mi|correo|tel[eé]fono|n[uú]mero|es|y|o|al)\b", re.I)
+_AFFIRM_RE = re.compile(
+    r"^\s*(?:yes|yep|yeah|yup|ya|correct|right|sure|ok(?:ay)?|perfect|great|"
+    r"that'?s (?:right|correct|fine|good|it|the best|best)|that works|that is (?:right|correct|fine)|"
+    r"sounds good|works for me|s[ií]|claro|correcto|as[ií] es|est[aá] bien|ese (?:est[aá] bien|es))\b"
+    r"[^?]{0,40}$", re.I)
 _DECLINE_RE = re.compile(
     r"^\s*(?:no|nope|nah|no thanks?|no,? thank you|never ?mind|nvm|not now|skip|"
     r"i'?d rather not|rather not|prefer not(?: to)?(?: say)?|no,? gracias|prefiero no|mejor no|olv[ií]delo)"
@@ -218,6 +228,13 @@ def _reach(e: Escalation) -> str:
     return e.contact_email or e.contact_phone or ""
 
 
+def _all_contact(e: Escalation, lang: str) -> str:
+    """Every way we have to reach the visitor, for the "is this the best
+    contact?" question."""
+    joiner = " y " if lang == "es" else " and "
+    return joiner.join(x for x in (e.contact_email, e.contact_phone) if x)
+
+
 def open_escalation(ctx: dict | None, session_id: str, message: str, history: list, *,
                     reason: str, source: str, action: str = "collect_contact") -> dict | None:
     """Record that this chat needs a person and alert the owner.
@@ -257,11 +274,15 @@ def open_escalation(ctx: dict | None, session_id: str, message: str, history: li
         esc.contact_name = esc.contact_name or found["name"]
         esc.contact_email = esc.contact_email or found["email"]
         esc.contact_phone = esc.contact_phone or found["phone"]
+        # Contact details from earlier in the chat are used, but the visitor is
+        # asked whether they are the best way to reach them for the follow-up.
         if _has_contact(esc) and esc.status == "collecting":
-            esc.status = "open"
+            esc.status = "confirming"
 
         lang = esc.lang or "en"
-        if _has_contact(esc):
+        if esc.status == "confirming":
+            suffix = t("esc_confirm_contact", lang, contact=_all_contact(esc, lang))
+        elif _has_contact(esc):
             suffix = t("esc_notified", lang)
         elif esc.status == "collecting":
             suffix = t("esc_ask_contact", lang)
@@ -303,14 +324,47 @@ def continue_capture(ctx: dict | None, session_id: str, message: str, history: l
     deliver_id = None
     try:
         esc = _active(db, client_id, session_id)
-        if not esc or esc.status != "collecting":
+        if not esc or esc.status not in ("collecting", "confirming"):
             return None
         lang = esc.lang or "en"
         now = _now()
         found = find_contact(message)
         esc.updated_at = now
 
-        if found["email"] or found["phone"]:
+        if esc.status == "confirming" and not (found["email"] or found["phone"]):
+            short = len((message or "").strip()) <= 60
+            if short and _AFFIRM_RE.match(message or ""):
+                # The owner's alert already carries these details.
+                esc.status = "open"
+                result = {"response": t("esc_confirmed", lang, contact=_all_contact(esc, lang))}
+            elif short and _DECLINE_RE.match(message or ""):
+                esc.status = "collecting"
+                esc.ask_count = 0
+                result = {"response": t("esc_ask_best", lang)}
+            else:
+                # They moved on. The details we have stand; answer normally.
+                esc.status = "open"
+                result = None
+        elif esc.status == "confirming":
+            # They gave a different email or phone: that one replaces what we
+            # had, and the owner gets the correction.
+            changed = ((found["email"] and found["email"] != esc.contact_email)
+                       or (found["phone"] and found["phone"] != esc.contact_phone))
+            if found["email"]:
+                esc.contact_email, esc.contact_phone = found["email"], found["phone"]
+            else:
+                esc.contact_phone, esc.contact_email = found["phone"], None
+            esc.contact_name = found["name"] or esc.contact_name
+            esc.status = "open"
+            esc.transcript = build_transcript(history, message)[-MAX_TRANSCRIPT_CHARS:]
+            result = {"response": t("esc_confirmed", lang, contact=_all_contact(esc, lang))}
+            if changed:
+                esc.contact_notified_at = None
+                deliver_id = esc.id
+        elif found["email"] or found["phone"]:
+            if ((found["email"] and found["email"] != esc.contact_email)
+                    or (found["phone"] and found["phone"] != esc.contact_phone)):
+                esc.contact_notified_at = None  # the owner is owed these details
             esc.contact_email = found["email"] or esc.contact_email
             esc.contact_phone = found["phone"] or esc.contact_phone
             esc.contact_name = found["name"] or esc.contact_name

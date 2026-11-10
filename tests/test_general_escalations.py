@@ -240,15 +240,47 @@ STUB["triage_route"] = "resolver"
 resp, _ = wchat(A_KEY, "ok thanks", sid)
 check("after capture the chat goes back to normal answers", resp == "We're open 9 to 5." and len(SENT["email"]) == 2)
 
-print("\n-- contact already in the chat: one alert, nothing to ask --")
-reset()
-_, sid = wchat(A_KEY, "My email is sam@example.com, can you check on order 77?")
-STUB.update(triage_route="escalation")
-resp, _ = wchat(A_KEY, "This is taking too long, I want it cancelled", sid)
+print("\n-- contact already in the chat: confirm it is the best one --")
+def earlier_contact():
+    reset()
+    _, s = wchat(A_KEY, "My email is sam@example.com, can you check on order 77?")
+    STUB.update(triage_route="escalation")
+    r, _ = wchat(A_KEY, "This is taking too long, I want it cancelled", s)
+    STUB.update(triage_route="resolver")
+    return r, s
+
+resp, sid = earlier_contact()
 e = esc_for(sid)
-check("known contact is used", e.contact_email == "sam@example.com" and e.status == "open")
-check("reply confirms instead of asking again", resp.endswith(t("esc_notified", "en")))
-check("a single alert with the contact and a reply-to", len(SENT["email"]) == 1 and SENT["email"][0][3] == "sam@example.com")
+check("known contact is used, pending confirmation", e.contact_email == "sam@example.com" and e.status == "confirming")
+check("reply asks whether it is the best contact, not for it again",
+      resp.endswith(t("esc_confirm_contact", "en", contact="sam@example.com")))
+check("the alert goes out right away with the contact and a reply-to",
+      len(SENT["email"]) == 1 and SENT["email"][0][3] == "sam@example.com")
+calls = STUB["calls"]
+resp, _ = wchat(A_KEY, "yes that's fine", sid)
+check("a yes confirms it", resp == t("esc_confirmed", "en", contact="sam@example.com") and esc_for(sid).status == "open")
+check("confirming makes no model call and sends no duplicate alert", STUB["calls"] == calls and len(SENT["email"]) == 1)
+
+resp, sid = earlier_contact()
+resp, _ = wchat(A_KEY, "Actually call me at 239-555-0101", sid)
+e = esc_for(sid)
+check("a different contact replaces the earlier one",
+      (e.contact_email, e.contact_phone, e.status) == (None, "(239) 555-0101", "open")
+      and resp == t("esc_confirmed", "en", contact="(239) 555-0101"))
+check("the owner gets the correction", len(SENT["email"]) == 2 and "(239) 555-0101" in SENT["email"][1][2])
+
+resp, sid = earlier_contact()
+resp, _ = wchat(A_KEY, "no", sid)
+check("a no asks for the best contact", resp == t("esc_ask_best", "en") and esc_for(sid).status == "collecting")
+resp, _ = wchat(A_KEY, "sam.work@example.com", sid)
+e = esc_for(sid)
+check("and the new one is recorded and sent", e.contact_email == "sam.work@example.com" and e.status == "open"
+      and len(SENT["email"]) == 2 and SENT["email"][1][3] == "sam.work@example.com")
+
+resp, sid = earlier_contact()
+resp, _ = wchat(A_KEY, "what are your hours on sunday?", sid)
+check("an unrelated question is just answered; the earlier contact stands",
+      resp == "We're open 9 to 5." and esc_for(sid).status == "open" and esc_for(sid).contact_email == "sam@example.com")
 
 print("\n-- visitor declines, or keeps chatting --")
 reset(triage_route="escalation")

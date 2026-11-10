@@ -196,6 +196,18 @@ STRINGS = {
         "en": "Thank you{name}. I've passed this along to the team, and someone will follow up with you at {contact}.",
         "es": "Gracias{name}. Le pasé esto al equipo y alguien se comunicará con usted al {contact}.",
     },
+    "esc_confirm_contact": {
+        "en": "I have {contact} for you. Is that the best way for the team to reach you? If not, just share the email or phone number you'd prefer.",
+        "es": "Tengo {contact} como su contacto. ¿Es la mejor forma de comunicarnos con usted? Si no, comparta el correo electrónico o número de teléfono que prefiera.",
+    },
+    "esc_confirmed": {
+        "en": "Thank you. I've passed this along to the team, and someone will follow up with you at {contact}.",
+        "es": "Gracias. Le pasé esto al equipo y alguien se comunicará con usted al {contact}.",
+    },
+    "esc_ask_best": {
+        "en": "No problem. What's the best email or phone number to reach you?",
+        "es": "No hay problema. ¿Cuál es el mejor correo electrónico o número de teléfono para contactarle?",
+    },
     "esc_notified": {
         "en": "I've passed this along to the team with your contact details, and someone will follow up with you.",
         "es": "Le pasé esto al equipo con sus datos de contacto y alguien se comunicará con usted.",

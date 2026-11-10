@@ -249,6 +249,8 @@ class Escalation(Base):
     session_id = Column(String, nullable=False, index=True)
 
     # collecting = asked the visitor for contact details, still waiting
+    # confirming = had contact details from earlier in the chat; asked the
+    #              visitor whether they are the best way to reach them
     # open       = the owner needs to follow up
     # closed     = the owner marked it handled
     status       = Column(String, nullable=False, default="collecting")

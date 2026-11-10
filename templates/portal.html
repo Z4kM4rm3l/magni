@@ -721,7 +721,8 @@
         if (!rows.length) { list.innerHTML = '<div class="empty">Nothing here yet. When a visitor needs a person, the chat shows up here and in your email.</div>'; return; }
         list.innerHTML = rows.map(e => {
           const badge = e.status === 'closed' ? '<span class="badge">Handled</span>'
-            : e.status === 'collecting' ? '<span class="badge flag">Waiting for contact details</span>' : '<span class="badge hot">Needs follow-up</span>';
+            : e.status === 'collecting' ? '<span class="badge flag">Waiting for contact details</span>'
+            : e.status === 'confirming' ? '<span class="badge flag">Confirming best contact</span>' : '<span class="badge hot">Needs follow-up</span>';
           const contact = [e.phone, e.email].filter(Boolean).map(esc).join(' · ');
           const done = e.status === 'closed';
           return `<div class="lead ${openEscs.has(e.id) ? 'open' : ''}" id="esc-${e.id}">
