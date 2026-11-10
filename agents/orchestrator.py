@@ -5,9 +5,9 @@ from core.utils import logger
 import agents.triage_agent as _triage_mod
 import agents.resolver_agent as _resolver_mod
 import agents.escalation_agent as _escalation_mod
-from core import lead_flow as _lead_flow
 from core import escalations as _esc
-from core.leasing import check_output, detect_accommodation, looks_like_leasing, DEFAULT_VERTICAL
+from core import guard as _guard
+from core.client_manager import client_context
 from core.i18n import detect_lang, t
 
 
@@ -85,36 +85,34 @@ class Orchestrator:
         # ── HISTORY SUMMARIZATION ────────────────────────────────────────────
         history_summary = _summarize_history(history)
 
-        # ── LEASING ASSISTANT (rental clients only) ──────────────────────────
+        # Opportunistic retry of any owner alert that failed to send earlier.
         try:
-            _lead_flow.maybe_sweep()
-        except Exception as e:  # never let the sweep affect a chat reply
-            logger.error(f"lead sweep error: {e}")
-        ctx = _lead_flow.load_client_context(resolved_client_id)
-        rental = _lead_flow.is_rental(ctx)
-        vertical = ctx["vertical"] if ctx else DEFAULT_VERTICAL
+            _esc.maybe_retry()
+        except Exception as e:  # never let the retry affect a chat reply
+            logger.error(f"alert retry error: {e}")
+        ctx = client_context(resolved_client_id)
         lang = detect_lang(message) or "en"
 
-        extra_note = ""  # fixed text appended to the final reply (residents)
         contact_reminder = ""  # fixed nudge while a chat waits on contact details
 
         def finish(result: dict) -> dict:
             result.setdefault("session_id", session_id)
             result["client_id"] = resolved_client_id
-            # Intake replies are already filtered (side answers) or fixed text.
-            if rental and result.get("route") != "leasing":
-                safe, flagged = check_output(result.get("response", ""), detect_lang(message))
-                if flagged:
-                    logger.warning(
-                        f"Fair Housing filter replaced a reply (client={str(resolved_client_id)[:8]} "
-                        f"session={session_id[:8]} flagged={flagged})"
-                    )
-                    result["response"] = safe
-            if extra_note:
-                result["response"] = f"{result.get('response', '').rstrip()}\n\n{extra_note}".strip()
             if contact_reminder and result.get("route") not in _ESCALATION_ROUTES:
                 result["response"] = f"{result.get('response', '').rstrip()}\n\n{contact_reminder}".strip()
             return result
+
+        business = (ctx or {}).get("business_name") or ("este negocio" if lang == "es" else "this business")
+
+        def safe(text: str) -> str:
+            """A model-written reply, or a fixed one if it fails the output
+            check (recites the instructions, claims to be human, claims an
+            action the assistant can't take)."""
+            kind = _guard.check_output(text, _resolver_mod.instruction_shingles())
+            if not kind:
+                return text
+            _guard.log_block("output", kind, resolved_client_id, session_id)
+            return t("guard_fallback", lang, business=business)
 
         def escalate(reply: str, reason: str, source: str, action: str = "collect_contact") -> str:
             """Record that this chat needs a person, alert the owner, and return
@@ -139,59 +137,38 @@ class Orchestrator:
         if captured:
             contact_reminder = captured.get("reminder", "")
 
-        forced_escalation = None
-        if rental:
-            lead_result = _lead_flow.continue_turn(ctx, session_id, message, history, history_summary)
-            if lead_result and lead_result.get("handoff"):
-                forced_escalation = "Prospect asked for a person or raised a concern during the rental intake."
-            elif lead_result:
-                return finish(lead_result)
-            elif (post := _lead_flow.post_intake(ctx, session_id, message)):
-                return finish(post)
-            elif detect_accommodation(message):
-                # Never let the general assistant quote pet rules at an assistance-animal request.
-                lead_result = _lead_flow.start(ctx, session_id, message, history, history_summary)
-                if lead_result:
-                    return finish(lead_result)
-
         # ── HIGH-RISK GATE (fixed patterns, no model) ────────────────────────
         # "Let me talk to a person" and legal threats go to a person even if
         # the model is down or would have read them differently.
-        gate_source = "intake" if forced_escalation else ""
-        if not forced_escalation:
-            forced_escalation = _esc.high_risk(message)
-            gate_source = "gate" if forced_escalation else ""
+        forced_escalation = _esc.high_risk(message)
+        gate_source = "gate" if forced_escalation else ""
+
+        # ── INJECTION GUARD (fixed patterns, no model) ───────────────────────
+        # The plainest attacks get a fixed reply and never reach the model.
+        # A request for a person above still wins: that is never refused.
+        attack = None if forced_escalation else _guard.check_input(message)
+        if attack:
+            _guard.log_block("input", attack, resolved_client_id, session_id)
+            return finish({
+                "response": t("guard_refusal", lang, business=business),
+                "intent": "general",
+                "session_id": session_id,
+                "route": "guard",
+            })
 
         # ── TRIAGE ───────────────────────────────────────────────────────────
         if forced_escalation:
-            triage_result = {"intent": "leasing" if rental else "general", "route": "escalation",
+            triage_result = {"intent": "general", "route": "escalation",
                              "escalation_reason": forced_escalation, "error": False}
         else:
             triage_result = _triage_mod.triage_agent.run({
                 "message": message,
                 "history_summary": history_summary,
-                "rental": rental,
             })
 
         intent = triage_result["intent"]
         route = triage_result["route"]
         escalation_reason = triage_result.get("escalation_reason")
-
-        # Current residents get the owner's office contact (and a 911 line in an
-        # emergency) added to whatever the assistant says. They never start the
-        # leasing intake and never become leads.
-        if rental and intent == "resident":
-            extra_note = _lead_flow.resident_note(ctx, message)
-
-        if rental and route != "escalation" and (
-            intent == "leasing"
-            or (triage_result.get("error") and looks_like_leasing(message))
-        ):
-            lead_result = _lead_flow.start(ctx, session_id, message, history, history_summary)
-            if lead_result:
-                return finish(lead_result)
-        if intent == "leasing" and not rental:
-            intent = "product"
 
         logger.info(
             f"Orchestrator: session={session_id[:8]} "
@@ -206,7 +183,9 @@ class Orchestrator:
                 "history_summary": history_summary,
                 "escalation_reason": escalation_reason or "Triage directed escalation.",
             })
-            reply = (esc_result.get("message_to_user") or "").strip() or t("esc_person_needed", lang)
+            reply = (esc_result.get("message_to_user") or "").strip()
+            if not reply or _guard.check_output(reply, _resolver_mod.instruction_shingles()) or len(reply) > 600:
+                reply = t("esc_person_needed", lang)  # fixed wording when the model's line can't be used
             # The model may only talk a chat back down ("deflect") when nothing
             # forced the escalation and it didn't fail. Otherwise a person is told.
             needs_person = bool(
@@ -236,10 +215,8 @@ class Orchestrator:
             "history_summary": history_summary,
             "history": history,
             "client_id": resolved_client_id,
-            "vertical": vertical,
             "bot_name": (ctx or {}).get("bot_name", ""),
             "business_name": (ctx or {}).get("business_name", ""),
-            "properties": ((ctx or {}).get("config") or {}).get("properties") or [],
         })
 
         # ── ESCALATION — the assistant could not answer at all ───────────────
@@ -265,7 +242,7 @@ class Orchestrator:
         # no second model call gets to decide otherwise.
         if res_result.get("escalation_flag"):
             reply = escalate(
-                res_result["response_text"],
+                safe(res_result["response_text"]),
                 reason="The assistant could not resolve this without a person.",
                 source="resolver",
             )
@@ -279,7 +256,7 @@ class Orchestrator:
             })
 
         return finish({
-            "response": res_result["response_text"],
+            "response": safe(res_result["response_text"]),
             "intent": intent,
             "session_id": session_id,
             "route": "resolver",

@@ -11,7 +11,6 @@ from routes.billing import billing_bp, portal_billing_bp
 from routes.widget import widget_bp
 from werkzeug.middleware.proxy_fix import ProxyFix
  
-from core.leads import leasing_metrics
 from core.knowledge_base import (
     add_article, get_all_articles, get_article,
     update_article, delete_article, get_categories
@@ -19,7 +18,8 @@ from core.knowledge_base import (
 from core.client_manager import (
     create_client, get_all_clients, get_client, get_client_by_api_key,
     update_client, suspend_client, reactivate_client,
-    delete_client, get_client_stats
+    delete_client, get_client_stats,
+    clean_alert_settings, SettingsError, DEFAULT_BOT_NAME,
 )
 from core.auth import login_required, api_login_required, attempt_login, logout, get_safe_redirect
 from core.client_auth import (
@@ -30,14 +30,7 @@ from core.client_auth import (
 from core import notifier
 from core.csrf import get_csrf_token, rotate_csrf_token, csrf_valid
 from core.billing_policies import TRIAL_DAYS, SELF_SERVE_PLANS, TIER_LIMITS
-from core.leasing import (
-    VERTICALS, RENTAL_VERTICALS, QUESTION_CATALOG, available_questions,
-    normalize_lead_config, LeadConfigError, DEFAULT_BOT_NAME, is_rental_vertical,
-)
 from core import escalations
-from core.leads import list_leads, set_owner_status, leads_csv, OWNER_STATUSES
-from core import scheduling
-from core.lead_flow import on_appointment_canceled, _lead_lang
 from core import rate_limit
 from core.security import apply_security_headers
 from core.utils import sanitize_input, logger
@@ -57,7 +50,7 @@ _is_production = os.getenv("FLASK_ENV", "production") != "development"
 if _is_production and not os.getenv("PUBLIC_BASE_URL", "").strip():
     raise RuntimeError(
         "PUBLIC_BASE_URL is not set (e.g. https://your-app.up.railway.app). "
-        "It's required for links in booking confirmations, alerts, and Stripe returns."
+        "It's required for links in alerts, password resets, and Stripe returns."
     )
 app.config["SESSION_COOKIE_SECURE"]   = _is_production
 app.config["SESSION_COOKIE_HTTPONLY"]  = True
@@ -82,7 +75,7 @@ with app.app_context():
  
 # ── PUBLIC LANDING PAGE ───────────────────────────────────────────────────
 # The root page is a short product page with a live demo: the real widget,
-# served for the "demo" client (a sample rental) created by
+# served for the "demo" client (a sample business) created by
 # scripts/create_demo_client.py. Demo usage runs through the same billing
 # gate as every customer, capped daily by scripts/reset_demo_daily.py.
 DEMO_CLIENT_ID = "demo"
@@ -243,7 +236,6 @@ def client_portal():
         client=client,
         embed_snippet=_embed_snippet(client["api_key"]),
         plans=SELF_SERVE_PLANS,
-        verticals=VERTICALS,
         billing_flash=request.args.get("billing", ""),
     )
 
@@ -342,26 +334,10 @@ def portal_kb_delete(article_id):
     return jsonify({"status": "deleted"})
 
 
-@app.route("/api/portal/insights", methods=["GET"])
-@client_login_required
-def portal_insights():
-    from core.insights import build_insights
-    client = get_client(current_client_id())
-    if not client:
-        return jsonify({"error": "Client not found"}), 404
-    days = request.args.get("days", 30, type=int)
-    return jsonify(build_insights(client["client_id"], client["lead_config"], days))
-
-
 @app.route("/api/portal/analytics", methods=["GET"])
 @client_login_required
 def portal_analytics():
-    cid = current_client_id()
-    client = get_client(cid)
-    data = leasing_metrics(cid)
-    data.update(escalations.metrics(cid))
-    data["rental"] = bool(client) and is_rental_vertical(client["vertical"])
-    return jsonify(data)
+    return jsonify(escalations.metrics(current_client_id()))
 
 
 @app.route("/api/portal/escalations", methods=["GET"])
@@ -407,180 +383,24 @@ def portal_settings():
         if derr:
             return derr
         updates["allowed_domains"] = domains
+    if "notify_email" in data or "notify_phone" in data:
+        current = get_client(cid) or {}
+        try:
+            email, phone = clean_alert_settings(
+                data.get("notify_email", current.get("notify_email", "")),
+                data.get("notify_phone", current.get("notify_phone", "")),
+            )
+        except SettingsError as e:
+            return jsonify({"error": str(e)}), 400
+        updates["notify_email"], updates["notify_phone"] = email, phone
     client = update_client(cid, **updates)
     if not client:
         return jsonify({"error": "Client not found"}), 404
     return jsonify({"client": client})
  
 # â”€â”€ ADMIN HUB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
- 
-@app.route("/api/portal/leasing", methods=["GET"])
-@client_login_required
-def portal_leasing_get():
-    """Leasing assistant settings plus the question catalog for each rental type."""
-    client = get_client(current_client_id())
-    if not client:
-        return jsonify({"error": "Client not found"}), 404
-    catalog = {
-        v: [{"key": k, "label": QUESTION_CATALOG[k]["label"], "text": QUESTION_CATALOG[k]["text"],
-             "needs_criteria": bool(QUESTION_CATALOG[k].get("needs_criteria"))}
-            for k in available_questions(v)]
-        for v in RENTAL_VERTICALS
-    }
-    return jsonify({
-        "vertical": client["vertical"],
-        "verticals": VERTICALS,
-        "config": client["lead_config"],
-        "catalog": catalog,
-        "account_email": client["email"],
-    })
 
 
-@app.route("/api/portal/leasing", methods=["PUT"])
-@client_login_required
-def portal_leasing_put():
-    cid = current_client_id()
-    data = request.get_json() or {}
-    vertical = (data.get("vertical") or "").strip()
-    if vertical not in VERTICALS:
-        return jsonify({"error": "Unknown business type"}), 400
-    try:
-        config = normalize_lead_config(data.get("config") or {}, vertical, strict=True)
-    except LeadConfigError as e:
-        return jsonify({"error": str(e)}), 400
-    updates = {"vertical": vertical, "lead_config": config}
-    client = update_client(cid, **updates)
-    if not client:
-        return jsonify({"error": "Client not found"}), 404
-    return jsonify({"vertical": client["vertical"], "config": client["lead_config"]})
-
-
-@app.route("/api/portal/leads", methods=["GET"])
-@client_login_required
-def portal_leads():
-    cid = current_client_id()
-    client = get_client(cid)
-    return jsonify({"leads": list_leads(cid, client["lead_config"] if client else None)})
-
-
-@app.route("/api/portal/leads/<lead_id>", methods=["PUT"])
-@client_login_required
-def portal_lead_update(lead_id):
-    status = ((request.get_json() or {}).get("owner_status") or "").strip()
-    if status not in OWNER_STATUSES:
-        return jsonify({"error": "owner_status must be one of: " + ", ".join(OWNER_STATUSES)}), 400
-    lead = set_owner_status(current_client_id(), lead_id, status)
-    if not lead:
-        return jsonify({"error": "Lead not found"}), 404
-    return jsonify({"lead": lead})
-
-
-@app.route("/api/portal/appointments", methods=["GET"])
-@client_login_required
-def portal_appointments():
-    client = get_client(current_client_id())
-    if not client:
-        return jsonify({"error": "Client not found"}), 404
-    sched = client["lead_config"].get("schedule") or scheduling.normalize_schedule(None)
-    return jsonify({
-        "appointments": scheduling.list_appointments(client["client_id"], sched),
-        "timezone_label": scheduling.tz_label(sched),
-        "enabled": scheduling.is_enabled(sched),
-    })
-
-
-@app.route("/api/portal/appointments/<appt_id>/cancel", methods=["POST"])
-@client_login_required
-def portal_appointment_cancel(appt_id):
-    appt = scheduling.cancel(appt_id, client_id=current_client_id(), by="owner")
-    if not appt:
-        return jsonify({"error": "Appointment not found or already canceled"}), 404
-    on_appointment_canceled(appt, by="owner")
-    return jsonify({"status": "canceled"})
-
-
-# Public appointment page (link in the prospect's confirmation email). The
-# unguessable token is the credential; it only allows viewing and canceling.
-def _appt_context(appt):
-    client = get_client(appt.client_id)
-    sched = (client or {}).get("lead_config", {}).get("schedule") or scheduling.normalize_schedule(None)
-    return client, sched
-
-
-# The public appointment page speaks the language the prospect chatted in.
-_APPT_PAGE = {
-    "en": {"html_lang": "en", "title": "Your appointment", "heading": "Your appointment", "confirmed": "Confirmed",
-           "canceled": "Canceled", "done": "Your appointment is canceled. {biz} has been notified.", "the_team": "The team",
-           "cancel_btn": "Cancel appointment", "confirm": "Cancel this appointment?",
-           "reschedule": "To reschedule, cancel here and pick a new time in the chat on our website, or reply to your confirmation email.",
-           "not_found": "We couldn't find that appointment.", "expired": "Your session expired. Please reload the page and try again.",
-           "started": "This appointment has already started.", "generic": "Appointment"},
-    "es": {"html_lang": "es", "title": "Su cita", "heading": "Su cita", "confirmed": "Confirmada",
-           "canceled": "Cancelada", "done": "Su cita quedó cancelada. Le avisamos a {biz}.", "the_team": "nuestro equipo",
-           "cancel_btn": "Cancelar cita", "confirm": "¿Cancelar esta cita?",
-           "reschedule": "Para cambiar la hora, cancele aquí y elija un nuevo horario en el chat de nuestro sitio web, o responda a su correo de confirmación.",
-           "not_found": "No encontramos esa cita.", "expired": "Su sesión expiró. Vuelva a cargar la página e inténtelo de nuevo.",
-           "started": "Esta cita ya comenzó.", "generic": "Cita"},
-}
-
-
-def _appt_page(record, status=200, **kw):
-    """Render the public page; `record` is the Appointment row (or None)."""
-    lang = _lead_lang(record.client_id, record.lead_id) if record is not None else "en"
-    tx = _APPT_PAGE.get(lang, _APPT_PAGE["en"])
-    if kw.get("error_key"):
-        kw["error"] = tx[kw.pop("error_key")]
-    kw.setdefault("error", None)
-    return render_template("appointment.html", tx=tx, lang=lang, **kw), status
-
-
-@app.route("/appt/<token>", methods=["GET"])
-def public_appointment(token):
-    if not rate_limit.hit(f"appt:{request.remote_addr}", limit=60, window_seconds=600):
-        return "Too many requests", 429
-    appt = scheduling.get_by_token(token)
-    if not appt:
-        return _appt_page(None, 404, appt=None, error_key="not_found")
-    client, sched = _appt_context(appt)
-    upcoming = scheduling._aware(appt.start_at) > scheduling.now_utc()
-    return _appt_page(appt, appt=scheduling.appt_to_dict(appt, sched),
-                      business=(client or {}).get("business_name", ""), details=sched.get("details", ""),
-                      can_cancel=appt.status == "booked" and upcoming, token=token, done=False)
-
-
-@app.route("/appt/<token>/cancel", methods=["POST"])
-def public_appointment_cancel(token):
-    if not rate_limit.hit(f"appt:{request.remote_addr}", limit=60, window_seconds=600):
-        return "Too many requests", 429
-    existing = scheduling.get_by_token(token)
-    if not csrf_valid():
-        return _appt_page(existing, 403, appt=None, error_key="expired")
-    if not existing:
-        return _appt_page(None, 404, appt=None, error_key="not_found")
-    client, sched = _appt_context(existing)
-    if scheduling._aware(existing.start_at) <= scheduling.now_utc():
-        return _appt_page(existing, 400, appt=scheduling.appt_to_dict(existing, sched),
-                          business=(client or {}).get("business_name", ""), details="",
-                          can_cancel=False, token=token, error_key="started", done=False)
-    appt = scheduling.cancel(token=token, by="prospect")
-    if appt:
-        on_appointment_canceled(appt, by="prospect")
-    shown = appt or existing
-    return _appt_page(existing, appt=scheduling.appt_to_dict(shown, sched),
-                      business=(client or {}).get("business_name", ""), details="",
-                      can_cancel=False, token=token, done=True)
-
-
-@app.route("/api/portal/leads.csv", methods=["GET"])
-@client_login_required
-def portal_leads_csv():
-    body = leads_csv(current_client_id())
-    return app.response_class(
-        body, mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=leads.csv"},
-    )
-
- 
 @app.route("/admin")
 @login_required
 def admin_hub():
@@ -817,27 +637,13 @@ def clients_delete(client_id):
  
 # â”€â”€ ANALYTICS ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  
-@app.route("/api/analytics/insights", methods=["GET"])
-@api_login_required
-def analytics_insights():
-    from core.insights import build_insights
-    client_id, err = _resolve_admin_client_id(request.args)
-    if err:
-        return err
-    client = get_client(client_id)
-    return jsonify(build_insights(client_id, (client or {}).get("lead_config") or {},
-                                  request.args.get("days", 30, type=int)))
-
-
 @app.route("/api/analytics", methods=["GET"])
 @api_login_required
 def analytics_data():
     client_id, err = _resolve_admin_client_id(request.args)
     if err:
         return err
-    data = leasing_metrics(client_id)
-    data.update(escalations.metrics(client_id))
-    return jsonify(data)
+    return jsonify(escalations.metrics(client_id))
 
 
 if __name__ == "__main__":

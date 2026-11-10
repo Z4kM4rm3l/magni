@@ -9,10 +9,11 @@ Client-facing widget API. Three endpoints:
 CORS is scoped per-request to each client's allowed_domains list.
 The operator panel routes (/admin, /api/*) are not affected.
 """
+import re
 import uuid
 from flask import Blueprint, request, jsonify, make_response, current_app
 from core.billing_policies import shows_branding
-from core.leasing import default_identity
+from core.client_manager import DEFAULT_BOT_NAME, DEFAULT_WELCOME, DEFAULT_COLOR
 from core.db import SessionLocal
 from core.models import Client
 from core.utils import sanitize_input, logger
@@ -26,6 +27,9 @@ WIDGET_PER_IP_PER_MIN = 20
 WIDGET_PER_KEY_PER_MIN = 300
 
 widget_bp = Blueprint("widget", __name__)
+
+# Session ids are server-issued UUIDs; accept only that shape back.
+_SESSION_ID_RE = re.compile(r"[A-Za-z0-9\-]{8,64}")
 
 
 def _get_client_by_key(api_key: str) -> Client | None:
@@ -92,11 +96,10 @@ def widget_config():
     if not client:
         return jsonify({"error": "Invalid or inactive API key"}), 403
 
-    default_name, default_welcome = default_identity(client.vertical)
     resp = make_response(jsonify({
-        "bot_name":       client.bot_name or default_name,
-        "primary_color":  client.primary_color or "#f59e0b",
-        "welcome_message": client.welcome_message or default_welcome,
+        "bot_name":       client.bot_name or DEFAULT_BOT_NAME,
+        "primary_color":  client.primary_color or DEFAULT_COLOR,
+        "welcome_message": client.welcome_message or DEFAULT_WELCOME,
         "branding":       shows_branding(client),
     }))
     return _add_cors(resp, client)
@@ -129,15 +132,21 @@ def widget_chat():
         }), 429)
         return _add_cors(resp, client)
 
-    data = request.get_json()
-    if not data or "message" not in data:
-        return jsonify({"error": "No message provided"}), 400
+    # Only two fields are read from the browser: the message and the session
+    # id. Both are checked for shape, and anything else in the body is ignored.
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or "message" not in data:
+        return _add_cors(make_response(jsonify({"error": "No message provided"}), 400), client)
+    if not isinstance(data["message"], str):
+        return _add_cors(make_response(jsonify({"error": "Message must be text"}), 400), client)
 
-    message = sanitize_input(data.get("message", ""))
+    message = sanitize_input(data["message"])
     if not message:
-        return jsonify({"error": "Empty message"}), 400
+        return _add_cors(make_response(jsonify({"error": "Empty message"}), 400), client)
 
     session_id = data.get("session_id") or str(uuid.uuid4())
+    if not isinstance(session_id, str) or not _SESSION_ID_RE.fullmatch(session_id):
+        return _add_cors(make_response(jsonify({"error": "Invalid session"}), 400), client)
     mem_key = f"{client.id}:{session_id}"
     history = conversation_manager.get_history(mem_key)
 

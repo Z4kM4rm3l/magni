@@ -9,7 +9,7 @@ Usage (Railway shell or locally with the production DATABASE_URL):
     python scripts/create_demo_client.py
 
 Safe to run again: it updates the demo's settings and replaces its sample
-articles. The demo never emails or texts anyone (see core/lead_flow.py), its
+articles. The demo never emails or texts anyone (see core/escalations.py), its
 usage is capped at DEMO_DAILY_LIMIT conversations a day, and
 scripts/reset_demo_daily.py clears its usage and chats every day.
 """
@@ -27,7 +27,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from core.db import SessionLocal, init_db
 from core.models import Client, KnowledgeArticle
-from core.leasing import normalize_lead_config, default_lead_config
 
 DEMO_CLIENT_ID = "demo"
 DEMO_DAILY_LIMIT = 50  # conversations per day across all visitors
@@ -64,10 +63,6 @@ def _demo_domain() -> list[str]:
 
 def create_demo_client():
     now = datetime.now(timezone.utc)
-    # A general business: no intake questions, no alert targets (the demo never
-    # emails or texts anyone).
-    config = normalize_lead_config(default_lead_config("general"), "general")
-
     db = SessionLocal()
     try:
         demo = db.get(Client, DEMO_CLIENT_ID)
@@ -81,8 +76,8 @@ def create_demo_client():
         demo.is_active = True
         demo.monthly_limit = DEMO_DAILY_LIMIT
         demo.trial_ends_at = None
-        demo.vertical = "general"
-        demo.lead_config = config
+        demo.notify_email = None
+        demo.notify_phone = None
         demo.bot_name = "Harbor Helper"
         demo.primary_color = "#b45309"
         demo.welcome_message = "Hi! Questions about our coffee, shipping or an order? I can help."
