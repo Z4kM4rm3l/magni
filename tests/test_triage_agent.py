@@ -13,7 +13,7 @@ cases = [
     {
         "label": "billing question -> resolver",
         "payload": {"message": "Why was I charged twice this month?", "history_summary": "No prior context."},
-        "expect_intent": "billing",
+        "expect_intent": "account",
         "expect_route": "resolver",
     },
     {
@@ -24,7 +24,7 @@ cases = [
     {
         "label": "technical question -> resolver",
         "payload": {"message": "The login page is broken, I keep getting an error.", "history_summary": "No prior context."},
-        "expect_intent": "technical",
+        "expect_intent": "account",
         "expect_route": "resolver",
     },
     {

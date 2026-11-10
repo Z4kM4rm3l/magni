@@ -25,7 +25,7 @@ SELF_SERVE_PLANS = {
         "name": "Starter",
         "price": PLAN_PRICES["starter"],
         "price_env": "STRIPE_PRICE_STARTER",
-        "blurb": "1,000 conversations/mo, lead capture, instant alerts",
+        "blurb": "1,000 conversations/mo, your knowledge base, instant \"needs a person\" alerts",
     },
     "professional": {
         "name": "Pro",

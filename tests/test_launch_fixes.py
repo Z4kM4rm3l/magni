@@ -120,7 +120,8 @@ r = w.get("/")
 page = r.get_data(as_text=True)
 check("landing page loads and embeds the demo widget", r.status_code == 200 and "/widget/magni.js" in page
       and 'data-api-key="sk_magni_demo_public_2026"' in page)
-check("landing page is about rentals", "property managers" in page.lower() and "shipment" not in page.lower())
+check("landing page is about customer service, not rentals",
+      "customer service" in page.lower() and "leasing" not in page.lower() and "tour" not in page.lower())
 
 # --- Admin lockout can't be dodged by forging X-Forwarded-For ---
 from core import auth as auth_mod

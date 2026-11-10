@@ -56,7 +56,7 @@ def _hint(error: str) -> str:
 
 
 def _targets() -> tuple[str, str]:
-    from core.leasing import normalize_phone_e164
+    from core.contact import normalize_phone_e164
     email = os.getenv("OPERATOR_ALERT_EMAIL", "").strip()
     phone = normalize_phone_e164(os.getenv("OPERATOR_ALERT_PHONE", "").strip()) or ""
     return email, phone
