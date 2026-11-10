@@ -92,9 +92,9 @@ check("leads older than 24 months are deleted", "a-l-25mo" not in lids and "b-l-
 check("leads under 24 months are kept", {"a-l-new", "a-l-partial", "a-l-23mo"} <= lids)
 aids = {a for (a,) in d.query(Appointment.id).all()}
 check("appointments older than 24 months are deleted, newer kept", aids == {"a-ap-up", "a-ap-cx", "a-ap-23mo"})
-check("the run reports what it deleted", counts == {"conversations": 2, "leads": 2, "appointments": 1})
+check("the run reports what it deleted", counts == {"conversations": 2, "leads": 2, "appointments": 1, "escalations": 0})
 d.close()
-check("a second run deletes nothing", retention.apply_retention(now) == {"conversations": 0, "leads": 0, "appointments": 0})
+check("a second run deletes nothing", retention.apply_retention(now) == {"conversations": 0, "leads": 0, "appointments": 0, "escalations": 0})
 
 retention.BATCH = 1
 d = _db.SessionLocal()

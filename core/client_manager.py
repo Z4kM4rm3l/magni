@@ -12,7 +12,9 @@ from datetime import datetime, timezone, timedelta
 from core.db import SessionLocal
 from core.models import Client
 from core.billing_policies import TIER_LIMITS, PLAN_PRICES, billing_state, trial_days_left
-from core.leasing import normalize_lead_config, VERTICALS, DEFAULT_VERTICAL, vertical_of
+from core.leasing import (normalize_lead_config, VERTICALS, DEFAULT_VERTICAL, vertical_of,
+                          DEFAULT_BOT_NAME, DEFAULT_WELCOME, RENTAL_BOT_NAME, RENTAL_WELCOME,
+                          default_identity, is_rental_vertical)
 from core.utils import logger
 
 # Feature flags per tier — kept here for admin UI display logic.
@@ -52,12 +54,12 @@ def _client_to_dict(c: Client) -> dict:
         "email":              c.email or "",
         "tier":               tier,
         "status":             "active" if c.is_active else "suspended",
-        "bot_name":           c.bot_name or "Leasing Assistant",
+        "bot_name":           c.bot_name or default_identity(c.vertical)[0],
         "api_key":            c.api_key or "",
         "notes":              c.notes or "",
         # Widget config
         "primary_color":      c.primary_color or "#f59e0b",
-        "welcome_message":    c.welcome_message or "Hi! Looking for a place? I can check availability and book a tour.",
+        "welcome_message":    c.welcome_message or default_identity(c.vertical)[1],
         "allowed_domains":    c.allowed_domains or [],
         # Billing counters (kept for UI parity with old JSON shape)
         "conversation_limit": (
@@ -89,11 +91,11 @@ def create_client(
     business_name: str,
     email: str,
     tier: str,
-    bot_name: str = "Leasing Assistant",
+    bot_name: str = DEFAULT_BOT_NAME,
     api_key: str = "",
     billing_date: str = "",
     primary_color: str = "#f59e0b",
-    welcome_message: str = "Hi! Looking for a place? I can check availability and book a tour.",
+    welcome_message: str = DEFAULT_WELCOME,
     allowed_domains: list | None = None,
     notes: str = "",
     trial_days: int | None = None,
@@ -190,6 +192,16 @@ def update_client(client_id: str, **kwargs) -> dict | None:
             "vertical":       "vertical",
             "lead_config":    "lead_config",
         }
+        # Switching business type swaps the assistant's name and greeting to
+        # the new type's defaults, but only where the owner never customized them.
+        if "vertical" in kwargs and is_rental_vertical(kwargs["vertical"]) != is_rental_vertical(client.vertical):
+            old_name, old_welcome = default_identity(client.vertical)
+            new_name, new_welcome = default_identity(kwargs["vertical"])
+            if "bot_name" not in kwargs and (client.bot_name or old_name) == old_name:
+                client.bot_name = new_name
+            if "welcome_message" not in kwargs and (client.welcome_message or old_welcome) == old_welcome:
+                client.welcome_message = new_welcome
+
         for kwarg_key, col_name in field_map.items():
             if kwarg_key in kwargs:
                 setattr(client, col_name, kwargs[kwarg_key])

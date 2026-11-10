@@ -1,8 +1,8 @@
 """
 core/leasing.py
 
-Leasing assistant for property managers (long-term rentals) and seasonal /
-vacation rental operators. Pure logic, no DB and no LLM, so it is easy to test.
+Business types, plus the opt-in leasing assistant for property managers
+(long-term rentals) and seasonal / vacation rental operators. Pure logic, no DB and no LLM, so it is easy to test.
 
 Fair Housing design (the reason this module looks the way it does):
   * Every prospect is asked the SAME questions, in the SAME order, with the SAME
@@ -23,19 +23,40 @@ import re
 
 from core.i18n import t as _t
 
-# Magni serves rental businesses only. Every account is one of these.
+# Magni is a customer service assistant for any business ("general"). The
+# leasing assistant in this module (intake questions, scheduler, Fair Housing
+# guardrails) is an opt-in mode for the two rental business types.
 VERTICALS = {
+    "general": "General business (customer service)",
     "long_term": "Long-term rentals",
     "seasonal": "Seasonal / vacation rentals",
 }
 RENTAL_VERTICALS = {"long_term", "seasonal"}
-DEFAULT_VERTICAL = "long_term"
+DEFAULT_VERTICAL = "general"
+
+# Widget defaults for a new account. Rental accounts that never changed these
+# get the leasing wording instead (see default_identity).
+DEFAULT_BOT_NAME = "Assistant"
+DEFAULT_WELCOME = "Hi! How can I help you today?"
+RENTAL_BOT_NAME = "Leasing Assistant"
+RENTAL_WELCOME = "Hi! Looking for a place? I can check availability and book a tour."
 
 
 def vertical_of(value) -> str:
-    """The account's business type, falling back to long-term rentals for
-    anything unknown (including the retired "general" type)."""
+    """The account's business type, falling back to the general customer
+    service assistant for anything unknown or unset."""
     return value if value in VERTICALS else DEFAULT_VERTICAL
+
+
+def is_rental_vertical(value) -> bool:
+    return vertical_of(value) in RENTAL_VERTICALS
+
+
+def default_identity(vertical) -> tuple[str, str]:
+    """(bot name, welcome message) a fresh account of this type starts with."""
+    if is_rental_vertical(vertical):
+        return RENTAL_BOT_NAME, RENTAL_WELCOME
+    return DEFAULT_BOT_NAME, DEFAULT_WELCOME
 
 # ── Question catalog ────────────────────────────────────────────────────────
 # Order here IS the order asked. Wording is fixed on purpose, in English and

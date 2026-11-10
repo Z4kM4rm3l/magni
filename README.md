@@ -1,15 +1,15 @@
 # Magni
 
-## The AI leasing assistant for rental businesses
+## AI customer service for any business's website, branded as theirs
 
-Magni is a website chat assistant for **long-term rental property managers** and **seasonal / vacation rental operators**. It sits on the business's own website and does what a leasing agent does at 9 pm on a Sunday:
+Magni is a chat assistant a business puts on its own website. It carries the business's name and colors, answers customers around the clock from the business's own knowledge base, and hands the chat to a person when one is needed:
 
-- answers prospects' questions from the business's own listings and policies,
-- asks a fixed, Fair Housing friendly set of pre-qualifying questions,
-- books tours or calls on the business's real calendar,
-- and sends every lead to the owner the moment it comes in.
+- answers questions only from what the business has published,
+- recognizes when a person is needed, collects the visitor's contact details, and emails the team the whole conversation,
+- keeps every handed-off chat in the owner's portal, so nothing depends on one email arriving,
+- and sets up in minutes: sign up, add FAQs and policies, paste one line of code.
 
-It also points current residents to the right contact, works in English and Spanish, and gives owners an Insights report built only from their own data.
+Rental businesses (long-term property managers and seasonal / vacation rental operators) can switch on a **leasing mode** that also pre-qualifies renters, captures leads and books tours.
 
 Magni is the flagship product of **Lemram Industries**.
 
@@ -19,27 +19,36 @@ Magni is the flagship product of **Lemram Industries**.
 
 ---
 
-## What it does for an owner
+## What it does for a business
 
 | | |
 |---|---|
-| **Answers prospects 24/7** | Rent, fees, pets, parking, amenities, availability, how to apply. Facts come only from the owner's knowledge base. If it isn't there, the assistant says the team will confirm, and never guesses. |
+| **Answers customers 24/7** | Products, services, pricing, hours, shipping, returns, policies. Facts come only from the owner's knowledge base. If it isn't there, the assistant says the team will confirm, and never guesses. |
+| **Hands off to a person** | When a visitor asks for someone, raises a complaint, or needs something only staff can do (a refund, a change to an order), the assistant says so, asks for a name and an email or phone number with fixed wording, and alerts the owner. |
+| **Never drops a handoff** | Each chat that needs a person is saved before any email is sent. The owner gets the full transcript by email (with a reply-to straight to the visitor once they share an address), sees it in the portal under **Needs a person**, and failed emails are retried automatically. |
+| **Fails safe** | Clear requests for a person and legal threats are caught by fixed patterns, not just the model. If the model is unavailable, the visitor is offered a follow-up from the team instead of an error. |
+| **Branded as the owner's** | Bot name, accent color and welcome message are the owner's. The assistant introduces itself by the owner's bot and business name. Starter plans show a small "Powered by Magni" link. |
+| **English and Spanish** | Fixed replies (the contact questions, confirmations, the whole leasing intake) have fixed wording in both languages. Free-form answers follow the visitor's language. |
+| **Self-serve** | Signup, a 14-day trial, the knowledge base, appearance, allowed websites and billing are all in the owner's portal. |
+
+### Leasing mode (opt-in, for rental businesses)
+
+| | |
+|---|---|
 | **Pre-qualifies the same way every time** | The owner picks from a fixed catalog of questions (property, move-in or stay dates, contact details, occupants or guests, lease length, budget, pets, posted criteria). Every prospect gets the same questions, in the same order, with the same wording. |
 | **Captures every lead** | Finished intakes alert the owner by email (and SMS once Twilio is approved), with the answers, a reply-to straight to the prospect, and a calendar invite when a tour is booked. Prospects who leave contact details and go quiet are sent as partial leads after 20 minutes. |
 | **Books tours and calls** | The assistant offers real open times from the owner's weekly hours, books outright only on an exact pick ("2") or an explicit day and time, and confirms anything looser. Prospects get a confirmation, an .ics invite, a cancel link and a day-before reminder. |
 | **Multiple properties** | Owners list their properties. The property question becomes a numbered pick, so every lead names a property the owner recognizes. |
 | **Current residents** | Residents asking about repairs, rent or their lease get the owner's office contact, plus a "call 911 first" line in an emergency. They never become leads. |
-| **English and Spanish** | The conversation's language is detected once and kept. Every fixed reply, question, booking time, email and the cancel page have fixed Spanish wording. |
 | **After-hours tagging** | Leads that arrive outside the owner's hours are tagged, so they get the first call in the morning. |
 | **Insights** | A data-only report: chat-to-tour funnel, where prospects stop, questions the assistant couldn't answer, what residents complain about, results by property, and rule-based suggestions that show the numbers behind them. No AI writes any of it. |
-| **Branded as the owner's** | Bot name, accent color and welcome message are the owner's. The assistant introduces itself by the owner's bot and business name. Starter plans show a small "Powered by Magni" link. |
 
 ---
 
 ## How a chat turn works
 
 ```text
-Visitor on the owner's website
+Visitor on the business's website
         │
         ▼
 Widget  (/widget/chat)
@@ -52,24 +61,28 @@ Billing and usage gate  (core/client_guard.py)
         │
         ▼
 Orchestrator  (agents/orchestrator.py)
-  ├── intake in progress?      → Lead flow (deterministic: what to ask, in what order)
-  │                               ├── Lead extractor (LLM reads answers only)
-  │                               └── Scheduler (open slots, parse "el sábado a las 11", book)
-  ├── otherwise → Triage (LLM: prospect / current resident / other, or escalate)
-  │       ├── prospect   → start the intake
-  │       ├── resident   → Resolver + the owner's office contact
-  │       ├── other      → Resolver (rental-only, declines off-topic)
-  │       └── escalation → Escalation agent + owner alert
+  ├── chat waiting on contact details? → read name / email / phone from the reply (code, no model)
+  ├── rental account, intake in progress? → Lead flow (deterministic)
+  ├── high-risk gate (fixed patterns: "talk to a person", legal threats) → escalate
+  ├── otherwise → Triage (LLM: what kind of message, or escalate)
+  │       ├── question      → Resolver (answers from the knowledge base)
+  │       ├── rental prospect → start the leasing intake
+  │       └── escalation    → Escalation agent
+  └── model failed, or the resolver asked for a person → escalate
         │
         ▼
-Fair Housing output filter (English + Spanish)  →  reply
+Escalation  (core/escalations.py)
+  - save the record, alert the owner, ask for contact details with fixed wording
+        │
+        ▼
+Fair Housing output filter (rental accounts)  →  reply
 ```
 
-The model is used for three narrow jobs: classifying the message, reading answers out of the prospect's words, and phrasing answers from the knowledge base. **What to ask, in what order, when to book and who gets alerted is ordinary code**, so it is predictable and testable.
+The model is used for narrow jobs: classifying the message, phrasing answers from the knowledge base, and (in leasing mode) reading answers out of the prospect's words. **Who gets alerted, what is asked, in what order, and when to book is ordinary code**, so it is predictable and testable.
 
 ---
 
-## Fair Housing by design
+## Fair Housing by design (leasing mode)
 
 - Questions come from a fixed catalog in `core/leasing.py`, with fixed English and Spanish wording. Owners can turn questions on or off, but never write their own.
 - The assistant collects answers. It never scores, ranks, approves or rejects anyone.
@@ -84,7 +97,7 @@ This is engineering care, not legal advice. Each customer's questions and criter
 
 ## Multi-tenant isolation
 
-Every tenant's data is keyed by `client_id`: knowledge articles, conversations and messages, leads, appointments and settings.
+Every tenant's data is keyed by `client_id`: knowledge articles, conversations and messages, chats that need a person, leads, appointments and settings.
 
 - Portal routes take the tenant **only** from the login session (`current_client_id()`), never from the request.
 - Conversations are owned by `client_id + session_id`, and live chat context is namespaced by tenant, so two visitors sharing a session id never share context.
@@ -106,7 +119,7 @@ Every tenant's data is keyed by `client_id`: knowledge articles, conversations a
 
 ## Data, privacy and retention
 
-- Chat transcripts are deleted after **12 months**, and leads and appointments after **24 months**, by a daily job (`scripts/apply_retention.py`). Owners can export leads to CSV at any time.
+- Chat transcripts (and the "needs a person" records that hold a copy) are deleted after **12 months**, and leads and appointments after **24 months**, by a daily job (`scripts/apply_retention.py`). Owners can export leads to CSV at any time.
 - Phone numbers and emails are masked in every Insights example.
 - Links in emails and chat come only from `PUBLIC_BASE_URL`, never from a request's Host header. The app refuses to start in production without it.
 - The landing-page demo never emails or texts anyone, and its data is cleared daily.
@@ -133,13 +146,15 @@ magni/
 │                             client portal and /api/portal/*, admin console, /appt/<token>
 ├── agents/
 │   ├── orchestrator.py       entry point for every chat turn
-│   ├── triage_agent.py       prospect / resident / other, or escalate
-│   ├── resolver_agent.py     rental-only answers grounded in the knowledge base
+│   ├── triage_agent.py       what kind of message this is, or escalate (general and rental prompts)
+│   ├── resolver_agent.py     answers grounded in the knowledge base (general and rental prompts)
 │   ├── escalation_agent.py   human handoff decisions
 │   └── lead_agent.py         reads intake answers out of the prospect's message
 ├── core/
 │   ├── llm.py                the only place that calls the model (Claude via the Anthropic SDK)
-│   ├── leasing.py            question catalog, config validation, Fair Housing guardrails
+│   ├── escalations.py        chats that need a person: record, contact capture, alerts, retries
+│   ├── llm_health.py         emails / texts the operator when model calls start failing
+│   ├── leasing.py            business types, question catalog, config validation, Fair Housing guardrails
 │   ├── lead_flow.py          deterministic intake, booking step, alerts, partial-lead sweep, reminders
 │   ├── scheduling.py         availability, reply parsing (EN/ES), booking, cancel, .ics, after-hours
 │   ├── i18n.py               English and Spanish for every fixed reply, language detection
@@ -154,11 +169,11 @@ magni/
 ├── routes/
 │   ├── widget.py             embeddable widget, allowed websites, rate limits
 │   └── billing.py            Stripe Checkout, Customer Portal, webhooks
-├── migrations/versions/      Alembic 0001 to 0008 (Alembic is the schema authority)
+├── migrations/versions/      Alembic 0001 to 0009 (Alembic is the schema authority)
 ├── scripts/                  cron jobs and one-off tools (sweep, usage reset, retention,
 │                             demo account, billing reconcile, admin password hash)
 ├── templates/                landing, portal, admin, auth and appointment pages
-├── tests/                    11 offline suites + 3 live-model checks
+├── tests/                    13 offline suites + 3 live-model checks
 └── docs/
     ├── LAUNCH_CHECKLIST.md   Railway, Stripe, email, cron and smoke-test steps
     └── BILLING_PROTECTION.md AI cost safety layers
@@ -174,20 +189,22 @@ cp .env.example .env            # fill in SECRET_KEY, DATABASE_URL, etc.
 python app.py                   # dev server; production runs gunicorn (see Procfile)
 ```
 
-The app runs `alembic upgrade head` on startup. `python scripts/create_demo_client.py` creates the sample apartment community used by the demo on `/`.
+The app runs `alembic upgrade head` on startup. `python scripts/create_demo_client.py` creates the sample coffee shop used by the demo on `/`.
 
 ### Tests
 
 ```bash
+python tests/test_general_escalations.py  # general accounts, contact capture, fail-safe escalation, portal API
 python tests/test_leasing_mvp.py          # billing, intake, Fair Housing guardrails, alerts
 python tests/test_scheduler.py            # booking, cancel, reminders, widget CORS
 python tests/test_portal_isolation.py     # tenant isolation + CSRF
 python tests/test_launch_fixes.py         # usage per conversation, trial resets, key + login hardening
-python tests/test_rental_focus.py         # rental-only prompts, analytics, tiers, demo, migration 0007
+python tests/test_rental_focus.py         # leasing mode prompts, analytics, tiers, demo, migration 0007
 python tests/test_market_features.py      # residents, after hours, Spanish, multiple properties
 python tests/test_account_emails.py       # SMTP provider, forgot password, usage warnings
 python tests/test_retention.py            # retention + database-side counts
 python tests/test_insights.py             # data-only insights, minimum samples, masking
+python tests/test_llm_health.py           # operator alert when model calls fail, recovery notice
 python tests/test_conversation_ownership.py
 python tests/test_orchestrator.py
 ```
@@ -206,6 +223,8 @@ Follow `docs/LAUNCH_CHECKLIST.md`. It covers the Railway web service and the cro
 
 **Tenant + resource ownership everywhere.** Records are addressed by the owning tenant together with their id, never by id alone. *Why:* a globally unique id is not authorization.
 
+**Fail safe on people.** A chat that needs a person is saved before anything is sent, fixed patterns catch the clearest cases without the model, and a model failure hands the chat to the team. *Why:* a missed handoff is the one failure a customer service product can't have.
+
 **Fail closed on money.** The usage gate locks the tenant's row, counts before the model is called, and blocks on any error. *Why:* a bug should cost a missed reply, not an unbounded bill.
 
 **Never hold a database transaction across a model call.** Leads are loaded, detached, worked on, and saved in short transactions. *Why:* a slow model response must not hold locks or exhaust the connection pool.
@@ -220,13 +239,14 @@ Follow `docs/LAUNCH_CHECKLIST.md`. It covers the Railway web service and the cro
 
 ## Status and what's next
 
-**Built:** self-serve signup with a 14-day trial and Stripe billing, the portal, the embeddable widget, the rental intake with instant alerts, partial-lead capture, the built-in scheduler, the resident path, Spanish, multiple properties, after-hours tags, Insights, forgot password, usage warnings, data retention, and the landing page with a live demo.
+**Built:** self-serve signup with a 14-day trial and Stripe billing, the portal, the embeddable widget, general customer service answers for any business, the "needs a person" handoff with contact capture and retries, the rental intake with instant alerts, partial-lead capture, the built-in scheduler, the resident path, Spanish, multiple properties, after-hours tags, Insights, forgot password, usage warnings, data retention, and the landing page with a live demo.
 
 **Next:**
 - Railway deploy and live smoke test
 - Transactional email provider on a verified domain
 - Twilio A2P 10DLC registration for SMS
-- Terms of service and privacy policy, and attorney review of the question set
+- Widget polish (chat that survives a page change, mobile layout), and a prompt-injection test suite
+- Terms of service and privacy policy, and attorney review of the leasing question set
 - The first paying customer
 
 **Later, as real usage shows the need:** CRM and calendar connectors (Google, Outlook), semantic retrieval for large knowledge bases, shared rate limits for multiple instances, and an evaluation suite that measures routing and grounding quality over time.
@@ -237,7 +257,7 @@ Follow `docs/LAUNCH_CHECKLIST.md`. It covers the Railway web service and the cro
 
 Magni was built end to end as a solo project. AI coding agents were used as development tools, while product direction, architecture, security boundaries and validation stayed under my direction.
 
-The project goes deliberately past a chatbot demo, into the problems that show up when an LLM becomes part of a real SaaS product. How should tenant identity flow through AI workflows? How do you keep a model inside legal guardrails like Fair Housing? How do you bound AI cost? How do you test AI behavior and authorization boundaries instead of trusting a demo?
+The project goes deliberately past a chatbot demo, into the problems that show up when an LLM becomes part of a real SaaS product. How should tenant identity flow through AI workflows? How do you make sure a customer who needs a person always reaches one? How do you keep a model inside legal guardrails like Fair Housing? How do you bound AI cost? How do you test AI behavior and authorization boundaries instead of trusting a demo?
 
 ---
 

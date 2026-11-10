@@ -892,5 +892,7 @@ def maybe_sweep() -> None:
         _last_sweep["t"] = now
         sweep_partial_leads()
         send_due_reminders()
+        from core import escalations
+        escalations.retry_unsent()
     finally:
         _sweep_lock.release()

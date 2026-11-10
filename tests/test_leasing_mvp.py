@@ -208,7 +208,7 @@ check("leasing PUT valid -> 200", r.status_code == 200)
 check("saved config normalized phone", r.get_json()["config"]["notify_phone"] == "+12395559999")
 g = A.get("/api/portal/leasing").get_json()
 check("leasing GET returns saved vertical + catalog", g["vertical"] == "long_term" and "seasonal" in g["catalog"])
-check("B's settings untouched by A", client_row("owner@beta.com").vertical == "long_term")
+check("B's settings untouched by A (still a general account)", client_row("owner@beta.com").vertical == "general")
 check("portal shows Leads card for rental client", b'id="leads"' in A.get("/portal").data)
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -318,10 +318,11 @@ STUB.update(triage_intent="general", resolver="This home is great for families a
 _, resp, _ = wchat(A_KEY, "Tell me about the area")
 check("rental client: steering reply replaced", resp == L.SAFE_FALLBACK)
 _, resp, _ = wchat(B_KEY, "Tell me about the area")
-check("never-configured account is a rental too: steering reply replaced", resp == L.SAFE_FALLBACK)
+check("general account: the Fair Housing filter is for rental accounts only",
+      resp == "This home is great for families and it's in a safe neighborhood.")
 STUB["triage_intent"] = "leasing"
 _, resp, sid6 = wchat(B_KEY, "Do you have a unit for rent?")
-check("never-configured account: leasing intent starts the default intake", lead_for(sid6) is not None)
+check("general account: no leasing intake starts", lead_for(sid6) is None)
 
 print("\n-- knowledge base context --")
 from core.knowledge_base import get_kb_context, add_article, WHOLE_KB_CHAR_BUDGET

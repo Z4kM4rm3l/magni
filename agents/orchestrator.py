@@ -1,14 +1,14 @@
 import os
 from core.db import SessionLocal
 from core.client_guard import track_and_validate_request
-from core.emailer import send_escalation_alert
 from core.utils import logger
 import agents.triage_agent as _triage_mod
 import agents.resolver_agent as _resolver_mod
 import agents.escalation_agent as _escalation_mod
 from core import lead_flow as _lead_flow
-from core.leasing import check_output, detect_accommodation, looks_like_leasing
-from core.i18n import detect_lang
+from core import escalations as _esc
+from core.leasing import check_output, detect_accommodation, looks_like_leasing, DEFAULT_VERTICAL
+from core.i18n import detect_lang, t
 
 
 def _summarize_history(history: list) -> str:
@@ -20,18 +20,8 @@ def _summarize_history(history: list) -> str:
     )
 
 
-def _maybe_alert(esc_result: dict, client_email: str, client_name: str,
-                 history: list, session_id: str) -> None:
-    """Fire escalation email if alert_client is set. Best-effort — never raises."""
-    if esc_result.get("alert_client") and client_email:
-        send_escalation_alert(
-            to_email=client_email,
-            business_name=client_name,
-            escalation_action=esc_result.get("action", ""),
-            escalation_reason=esc_result.get("reason", ""),
-            history=history,
-            session_id=session_id,
-        )
+# Routes where the reply already talks about handing the chat to the team.
+_ESCALATION_ROUTES = ("escalation", "resolver_escalated", "escalation_contact")
 
 
 class Orchestrator:
@@ -102,9 +92,11 @@ class Orchestrator:
             logger.error(f"lead sweep error: {e}")
         ctx = _lead_flow.load_client_context(resolved_client_id)
         rental = _lead_flow.is_rental(ctx)
-        vertical = ctx["vertical"] if ctx else "long_term"
+        vertical = ctx["vertical"] if ctx else DEFAULT_VERTICAL
+        lang = detect_lang(message) or "en"
 
         extra_note = ""  # fixed text appended to the final reply (residents)
+        contact_reminder = ""  # fixed nudge while a chat waits on contact details
 
         def finish(result: dict) -> dict:
             result.setdefault("session_id", session_id)
@@ -120,7 +112,32 @@ class Orchestrator:
                     result["response"] = safe
             if extra_note:
                 result["response"] = f"{result.get('response', '').rstrip()}\n\n{extra_note}".strip()
+            if contact_reminder and result.get("route") not in _ESCALATION_ROUTES:
+                result["response"] = f"{result.get('response', '').rstrip()}\n\n{contact_reminder}".strip()
             return result
+
+        def escalate(reply: str, reason: str, source: str, action: str = "collect_contact") -> str:
+            """Record that this chat needs a person, alert the owner, and return
+            the reply with the fixed contact line added. Never raises."""
+            record = _esc.open_escalation(ctx, session_id, message, history,
+                                          reason=reason, source=source, action=action)
+            if not record:
+                return reply
+            return f"{reply.rstrip()}\n\n{record['suffix']}".strip()
+
+        # ── CONTACT CAPTURE (a chat already handed to the team) ──────────────
+        # Runs before any model call: reading an email or phone number out of
+        # the visitor's reply is ordinary code.
+        captured = _esc.continue_capture(ctx, session_id, message, history)
+        if captured and captured.get("response"):
+            return finish({
+                "response": captured["response"],
+                "intent": "general",
+                "session_id": session_id,
+                "route": "escalation_contact",
+            })
+        if captured:
+            contact_reminder = captured.get("reminder", "")
 
         forced_escalation = None
         if rental:
@@ -137,14 +154,23 @@ class Orchestrator:
                 if lead_result:
                     return finish(lead_result)
 
+        # ── HIGH-RISK GATE (fixed patterns, no model) ────────────────────────
+        # "Let me talk to a person" and legal threats go to a person even if
+        # the model is down or would have read them differently.
+        gate_source = "intake" if forced_escalation else ""
+        if not forced_escalation:
+            forced_escalation = _esc.high_risk(message)
+            gate_source = "gate" if forced_escalation else ""
+
         # ── TRIAGE ───────────────────────────────────────────────────────────
         if forced_escalation:
-            triage_result = {"intent": "leasing", "route": "escalation",
+            triage_result = {"intent": "leasing" if rental else "general", "route": "escalation",
                              "escalation_reason": forced_escalation, "error": False}
         else:
             triage_result = _triage_mod.triage_agent.run({
                 "message": message,
                 "history_summary": history_summary,
+                "rental": rental,
             })
 
         intent = triage_result["intent"]
@@ -180,14 +206,27 @@ class Orchestrator:
                 "history_summary": history_summary,
                 "escalation_reason": escalation_reason or "Triage directed escalation.",
             })
-            _maybe_alert(esc_result, client_email, client_name, history, session_id)
+            reply = (esc_result.get("message_to_user") or "").strip() or t("esc_person_needed", lang)
+            # The model may only talk a chat back down ("deflect") when nothing
+            # forced the escalation and it didn't fail. Otherwise a person is told.
+            needs_person = bool(
+                gate_source or esc_result.get("error") or esc_result.get("alert_client")
+                or esc_result.get("action") != "deflect"
+            )
+            if needs_person:
+                reply = escalate(
+                    reply,
+                    reason=escalation_reason or esc_result.get("reason") or "Flagged for a person.",
+                    source=gate_source or "triage",
+                    action=esc_result.get("action") or "collect_contact",
+                )
             return finish({
-                "response": esc_result["message_to_user"],
+                "response": reply,
                 "intent": intent,
                 "session_id": session_id,
                 "route": "escalation",
                 "escalation_action": esc_result["action"],
-                "alert_client": esc_result["alert_client"],
+                "alert_client": needs_person,
             })
 
         # ── RESOLVER ─────────────────────────────────────────────────────────
@@ -203,22 +242,40 @@ class Orchestrator:
             "properties": ((ctx or {}).get("config") or {}).get("properties") or [],
         })
 
-        # ── ESCALATION — resolver-directed ───────────────────────────────────
-        if res_result.get("escalation_flag"):
-            esc_result = _escalation_mod.escalation_agent.run({
-                "message": message,
-                "intent": intent,
-                "history_summary": history_summary,
-                "escalation_reason": "Resolver determined it could not resolve this without human help.",
-            })
-            _maybe_alert(esc_result, client_email, client_name, history, session_id)
+        # ── ESCALATION — the assistant could not answer at all ───────────────
+        # A model outage must not leave the visitor at "please try again": the
+        # chat is handed to the team with fixed wording instead.
+        if res_result.get("error") and ctx:
+            reply = escalate(
+                t("esc_trouble", lang),
+                reason="The assistant had a technical problem and could not answer, so the visitor was offered a follow-up.",
+                source="error",
+            )
             return finish({
-                "response": res_result["response_text"],
+                "response": reply,
+                "intent": intent,
+                "session_id": session_id,
+                "route": "escalation",
+                "escalation_action": "collect_contact",
+                "alert_client": True,
+            })
+
+        # ── ESCALATION — resolver-directed ───────────────────────────────────
+        # The assistant said it needs a person. That always reaches the owner;
+        # no second model call gets to decide otherwise.
+        if res_result.get("escalation_flag"):
+            reply = escalate(
+                res_result["response_text"],
+                reason="The assistant could not resolve this without a person.",
+                source="resolver",
+            )
+            return finish({
+                "response": reply,
                 "intent": intent,
                 "session_id": session_id,
                 "route": "resolver_escalated",
-                "escalation_action": esc_result["action"],
-                "alert_client": esc_result["alert_client"],
+                "escalation_action": "collect_contact",
+                "alert_client": True,
             })
 
         return finish({

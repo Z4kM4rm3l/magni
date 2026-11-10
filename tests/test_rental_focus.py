@@ -1,6 +1,6 @@
-"""Rental-only cleanup: no "general" business type, rental prompts and intents,
-leasing analytics, operator-only tiers, a silent demo account, and the 0007
-migration. Run: python tests/test_rental_focus.py
+"""The opt-in leasing mode stays intact next to the default "general" business
+type: rental prompts and intents, leasing analytics, operator-only tiers, a
+silent demo account, and the 0007 migration. Run: python tests/test_rental_focus.py
 """
 import os, sys, time, uuid
 from datetime import datetime, timezone, timedelta
@@ -39,10 +39,11 @@ def check(name, cond):
         failures.append(name)
 
 # --- Business types ---
-check("only rental business types remain", set(L.VERTICALS) == {"long_term", "seasonal"})
-check("unknown or retired type falls back to long-term", L.vertical_of("general") == "long_term" and L.vertical_of(None) == "long_term")
+check("business types are general plus the two rental types", set(L.VERTICALS) == {"general", "long_term", "seasonal"})
+check("rental types are the two leasing ones", L.RENTAL_VERTICALS == {"long_term", "seasonal"})
+check("unknown or unset type falls back to general", L.vertical_of("realtor") == "general" and L.vertical_of(None) == "general")
 
-# --- Prompts and intents are rental-only ---
+# --- Rental accounts keep the rental prompts and intents ---
 check("triage intents are leasing / resident / general", INTENTS == ("leasing", "resident", "general"))
 check("triage prompt has no shipping or order intents", "orders" not in TRIAGE_PROMPT and "shipping" not in TRIAGE_PROMPT)
 check("flows are prospect, resident, other", set(SUPPORT_FLOWS) == {"leasing", "resident", "general"})
@@ -50,19 +51,24 @@ check("no flow offers refunds", not any("refund" in v.lower() and "process" in v
 check("resolver declines off-topic work", "writing code" in MAGNI_SYSTEM_PROMPT and "Don't help with anything unrelated" in MAGNI_SYSTEM_PROMPT)
 check("resolver forbids invented business facts", "Never make up facts about this business" in MAGNI_SYSTEM_PROMPT)
 
-# --- New accounts get rental defaults ---
+# --- New accounts start general; choosing a rental type brings the leasing defaults ---
 c = appmod.app.test_client()
 with c.session_transaction() as s:
     s["_csrf_token"] = "t"
 c.post("/signup", data={"business_name": "Palm Props", "email": "o@palm.com", "password": "Passw0rd123", "csrf_token": "t"})
 d = _db.SessionLocal(); row = d.query(Client).filter(Client.email == "o@palm.com").first(); d.close()
-check("new signup is a long-term rental account", row.vertical == "long_term")
-check("new signup gets the rental bot name and greeting",
-      row.bot_name == "Leasing Assistant" and "book a tour" in (row.welcome_message or ""))
+check("new signup is a general account", row.vertical == "general")
+check("new signup gets the general bot name and greeting",
+      row.bot_name == "Assistant" and row.welcome_message == "Hi! How can I help you today?")
 with c.session_transaction() as s:
     s["_csrf_token"] = "t"
-r = c.put("/api/portal/leasing", json={"vertical": "general", "config": {}}, headers={"X-CSRF-Token": "t"})
-check("portal refuses the retired general type", r.status_code == 400)
+r = c.put("/api/portal/leasing", json={"vertical": "realtor", "config": {}}, headers={"X-CSRF-Token": "t"})
+check("portal refuses an unknown business type", r.status_code == 400)
+r = c.put("/api/portal/leasing", json={"vertical": "long_term", "config": {}}, headers={"X-CSRF-Token": "t"})
+d = _db.SessionLocal(); row = d.query(Client).filter(Client.email == "o@palm.com").first(); d.close()
+check("choosing a rental type switches the account to leasing", r.status_code == 200 and row.vertical == "long_term")
+check("an uncustomized assistant picks up the rental name and greeting",
+      row.bot_name == "Leasing Assistant" and "book a tour" in (row.welcome_message or ""))
 
 # --- Leasing analytics ---
 now = datetime.now(timezone.utc)
@@ -115,7 +121,9 @@ notifier.send_sms = lambda *a, **k: SENT.append(a) or True
 import scripts.create_demo_client as demo_mod
 demo_mod.create_demo_client()
 ctx = lead_flow.load_client_context("demo")
-check("demo account is a rental with booking on", ctx["vertical"] == "long_term" and ctx["config"]["schedule"]["enabled"])
+check("demo answers from its own sample knowledge base",
+      "Harbor Roasters" in __import__("core.knowledge_base", fromlist=["x"]).get_kb_context("demo", "hours"))
+check("demo account is a general business with no intake", ctx["vertical"] == "general" and ctx["config"]["questions"] == [])
 check("demo widget is allowed on the app's own domain", _db.SessionLocal().get(Client, "demo").allowed_domains == ["app.example.com"])
 fake_lead = Lead(id="dl", client_id="demo", session_id="ds", status="complete", answers={"email": "x@y.com", "name": "X"}, flags={})
 lead_flow._send_alert(ctx, fake_lead, "complete")
